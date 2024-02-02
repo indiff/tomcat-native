@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "apr.h": "c",
+        "tcn.h": "c",
+        "sddl.h": "c",
+        "mswsock.h": "c",
+        "shlwapi.h": "c",
+        "tlhelp32.h": "c",
+        "apr_time.h": "c",
+        "process.h": "c",
+        "corecrt.h": "c"
+    }
+}
