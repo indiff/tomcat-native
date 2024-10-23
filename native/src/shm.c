@@ -17,10 +17,16 @@
 #include "tcn.h"
 #include "apr_shm.h"
 
-TCN_IMPLEMENT_CALL(jlong, Shm, create)(TCN_STDARGS, jlong reqsize,
+// #define TCN_IMPLEMENT_CALL(RT, CL, FN)  \
+// JNIEXPORT RT JNICALL Java_org_apache_tomcat_jni_##CL##_##FN
+// JNIEXPORT jlong JNICALL Java_org_apache_tomcat_jni_##Shm##_##create
+// TCN_IMPLEMENT_CALL(jlong, Shm, create)(TCN_STDARGS, jlong reqsize,
+JNIEXPORT jlong JNICALL Java_org_apache_tomcat_jni_Shm_create 
+                                      (TCN_STDARGS, jlong reqsize,
                                        jstring filename,
                                        jlong pool)
 {
+
     apr_pool_t *p = J2P(pool, apr_pool_t *);
     const char *fname = NULL;
     apr_shm_t *shm;
