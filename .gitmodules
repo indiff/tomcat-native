@@ -1,0 +1,3 @@
+[submodule "native/srclib/apr/apr"]
+	path = native/srclib/apr/apr
+	url = https://github.com/apache/apr.git

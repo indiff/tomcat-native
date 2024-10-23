@@ -76,7 +76,8 @@ LFLAGS = $(LFLAGS) $(APR_LIB)
 LFLAGS = $(LFLAGS) libeayfips32.lib libeaycompat32.lib ssleay32.lib /NODEFAULTLIB:LIBCMT
 !ELSE
 !IF DEFINED(OPENSSL_NEW_LIBS)
-LFLAGS = $(LFLAGS) libssl.lib libcrypto.lib crypt32.lib
+#LFLAGS = $(LFLAGS) libssl.lib libcrypto.lib crypt32.lib
+LFLAGS = $(LFLAGS)
 !ELSE
 LFLAGS = $(LFLAGS) libeay32.lib ssleay32.lib
 !ENDIF
@@ -105,12 +106,12 @@ OBJECTS = \
 	$(WORKDIR)\pool.obj \
 	$(WORKDIR)\proc.obj \
 	$(WORKDIR)\shm.obj \
-	$(WORKDIR)\ssl.obj \
-	$(WORKDIR)\sslcontext.obj \
-	$(WORKDIR)\sslconf.obj \
-	$(WORKDIR)\sslinfo.obj \
-	$(WORKDIR)\sslnetwork.obj \
-	$(WORKDIR)\sslutils.obj \
+#	$(WORKDIR)\ssl.obj \
+#	$(WORKDIR)\sslcontext.obj \
+#	$(WORKDIR)\sslconf.obj \
+#	$(WORKDIR)\sslinfo.obj \
+#	$(WORKDIR)\sslnetwork.obj \
+#	$(WORKDIR)\sslutils.obj \
 	$(WORKDIR)\stdlib.obj \
 	$(WORKDIR)\user.obj \
 	$(WORKDIR)\thread.obj \
