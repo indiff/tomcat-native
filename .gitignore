@@ -38,3 +38,4 @@
 build.properties
 /native/WIN7_X64_DLL_RELEASE
 /native/WIN7_X64_OCSP_DLL_RELEASE
+/native/WIN7_X64_DLL_RELEASE_JDK23
