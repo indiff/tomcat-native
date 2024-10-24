@@ -1,0 +1,4 @@
+[submodule "native/srclib/apr/apr"]
+	path = native/srclib/apr/apr
+	url = https://github.com/indiff/apr.git
+	branch = 1.7.x
