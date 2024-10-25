@@ -77,7 +77,8 @@ LIBS = $(LIBS) libeayfips32.lib libeaycompat32.lib ssleay32.lib
 LFLAGS = $(LFLAGS) /NODEFAULTLIB:LIBCMT
 !ELSE
 !IF DEFINED(OPENSSL_NEW_LIBS)
-LIBS = $(LIBS) libssl.lib libcrypto.lib crypt32.lib
+#LIBS = $(LIBS) libssl.lib libcrypto.lib crypt32.lib
+LIBS = $(LIBS)
 !ELSE
 LIBS = $(LIBS) libeay32.lib ssleay32.lib
 !ENDIF
@@ -93,10 +94,10 @@ OBJECTS = \
 	$(WORKDIR)\error.obj \
 	$(WORKDIR)\jnilib.obj \
 	$(WORKDIR)\pool.obj \
-	$(WORKDIR)\ssl.obj \
-	$(WORKDIR)\sslcontext.obj \
-	$(WORKDIR)\sslconf.obj \
-	$(WORKDIR)\sslutils.obj \
+#	$(WORKDIR)\ssl.obj \
+#	$(WORKDIR)\sslcontext.obj \
+#	$(WORKDIR)\sslconf.obj \
+#	$(WORKDIR)\sslutils.obj \
 	$(WORKDIR)\system.obj
 
 !IF DEFINED(WITH_FIPS)

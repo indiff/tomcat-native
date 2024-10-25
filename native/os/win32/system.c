@@ -61,7 +61,7 @@ DllMain(
         /** The thread of the attached process terminates.
          */
         case DLL_THREAD_DETACH:
-            ERR_remove_thread_state(NULL);
+//            ERR_remove_thread_state(NULL);   // 这里手动注释掉，原来是需要ssl #ifdef HAVE_OPENSSL ERR_remove_thread_state(NULL); #endif
             break;
 
         /** DLL unload due to process termination
