@@ -83,7 +83,7 @@ LIBS = $(LIBS)
 LIBS = $(LIBS) libeay32.lib ssleay32.lib
 !ENDIF
 !ENDIF
-
+# 手动设置 删掉 HAVE_OPENSSL ，避免 native\os\win32\system.c  调用  ERR_remove_thread_state 报错
 CFLAGS = $(CFLAGS) -DZLIB_WINAPI -DNO_IDEA -DNO_RC5 -DNO_MDC2 -DOPENSSL_NO_IDEA \
 	-DOPENSSL_NO_RC5 -DOPENSSL_NO_MDC2 -DHAVE_SSL_SET_STATE=1
 
