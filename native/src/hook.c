@@ -16,8 +16,7 @@
 
 #include "tcn.h"
 
-TCN_IMPLEMENT_CALL(jlong, Thread, current)(TCN_STDARGS)
-{
-    UNREFERENCED_STDARGS;
-    return (jlong)tcn_get_thread_id();
-}
+
+void FunEnter( void* pCallee ){}
+
+void FunExit( void* pCallee ){}

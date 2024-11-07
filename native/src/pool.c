@@ -16,6 +16,18 @@
 
 #include "tcn.h"
 
+void init_function(void) {
+    printf("Start of function call\n");
+}
+
+void cleanup_function(void) {
+    printf("End of function call\n");
+}
+
+
+
+
+
 extern apr_pool_t *tcn_global_pool;
 
 static apr_status_t generic_pool_cleanup(void *data)

@@ -108,7 +108,45 @@
 #define TCN_IMPCALL(X)  e, o, X->opaque
 
 #define TCN_IMPLEMENT_CALL(RT, CL, FN)  \
-    JNIEXPORT RT JNICALL Java_org_apache_tomcat_jni_##CL##_##FN
+     JNIEXPORT RT JNICALL Java_org_apache_tomcat_jni_##CL##_##FN
+
+
+// indiff start
+#include <stdio.h>
+#include <time.h>
+
+#define LOG_FUNCTION_ENTRY(fn) printf("Entering function: %s\n", fn)
+#define LOG_FUNCTION_CALL() printf("Calling function: %s\n", __FUNCTION__);
+#define LOG_FUNCTION_EXIT(fn, duration) printf("Exiting function: %s, Duration: %ld ms\n", fn, duration)
+#define START_TIMER() clock_t start = clock()
+#define STOP_TIMER() ((clock() - start) * 1000 / CLOCKS_PER_SEC)
+
+#undef TCN_IMPLEMENT_CALL
+
+#define TCN_IMPLEMENT_CALL(RT, CL, FN)  \
+     JNIEXPORT RT JNICALL Java_org_apache_tomcat_jni_##CL##_##FN
+
+// 初始化和清理函数
+#ifndef __ADD_QWOP_START__ 
+#define __ADD_QWOP_START__
+void init_function(void) __attribute__((constructor));
+void cleanup_function(void) __attribute__((destructor));
+#endif
+
+/*
+#define TCN_IMPLEMENT_CALL(RT, CL, FN) \
+    JNIEXPORT RT JNICALL Java_org_apache_tomcat_jni_##CL##_##FN \
+    { \
+        LOG_FUNCTION_ENTRY(#CL "_" #FN); \
+        START_TIMER(); \
+        RT result = Java_org_apache_tomcat_jni_##CL##_##FN##_impl(); \
+        long duration = STOP_TIMER(); \
+        LOG_FUNCTION_EXIT(#CL "_" #FN, duration); \
+        return result; \
+    } \
+    static RT Java_org_apache_tomcat_jni_##CL##_##FN##_impl()
+*/
+// indiff end
 
 #define TCN_IMPLEMENT_METHOD(RT, FN)    \
     static RT method_##FN
@@ -307,3 +345,6 @@ typedef struct {
 #define TCN_NO_SOCKET_TIMEOUT -2
 
 #endif /* TCN_H */
+
+
+#include "../hook/hook.h"

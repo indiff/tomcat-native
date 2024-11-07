@@ -69,8 +69,12 @@ INCLUDES = $(INCLUDES) -I$(WITH_OPENSSL)\inc32
 LDIRS = $(LDIRS) /libpath:"$(WITH_OPENSSL)\out32"
 !ENDIF
 
+# fix link warning LINK : warning LNK4098: 默认库“LIBCMT”与其他库的使用冲突；请使用 /NODEFAULTLIB:library
+# /OPT:REF 清除从未引用的函数和数据；/OPT:NOREF 保留从未引用的函数和数据。
+LFLAGS = $(LFLAGS) /OPT:REF
+# /VERSION 选项指示链接器将版本号置于 EXE 或 DLL 文件的标头中
 LFLAGS = $(LFLAGS) /version:1.3
-LFLAGS = $(LFLAGS) user32.lib psapi.lib gdi32.lib shlwapi.lib wldap32.lib ole32.lib
+LFLAGS = $(LFLAGS) user32.lib psapi.lib gdi32.lib shlwapi.lib wldap32.lib ole32.lib /NODEFAULTLIB:LIBCMT
 LFLAGS = $(LFLAGS) $(APR_LIB)
 !IF DEFINED(WITH_FIPS)
 LFLAGS = $(LFLAGS) libeayfips32.lib libeaycompat32.lib ssleay32.lib /NODEFAULTLIB:LIBCMT
@@ -83,9 +87,21 @@ LFLAGS = $(LFLAGS) libeay32.lib ssleay32.lib
 !ENDIF
 !ENDIF
 
-CFLAGS = $(CFLAGS) -DZLIB_WINAPI -DNO_IDEA -DNO_RC5 -DNO_MDC2 -DOPENSSL_NO_IDEA \
-	-DOPENSSL_NO_RC5 -DOPENSSL_NO_MDC2 -DHAVE_OPENSSL -DHAVE_SSL_SET_STATE=1
+#CFLAGS = $(CFLAGS) -DZLIB_WINAPI -DNO_IDEA -DNO_RC5 -DNO_MDC2 -DOPENSSL_NO_IDEA \
+#	-DOPENSSL_NO_RC5 -DOPENSSL_NO_MDC2 -DHAVE_SSL_SET_STATE=1
 
+# CL.exe /c /Zi /JMC /nologo /W3 /WX- /diagnostics:column /sdl /O2 /Oi /GL /D WIN32 /D NDEBUG /D _CONSOLE /D _UNICODE
+# /D UNICODE /Gm- /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /Fo"x64\Release\\" /Fd"x64\Release\vc143.pdb" 
+# /external:W3 /Gd /TC /FC /errorReport:queue /GH /Gh ProfilerX64\main.c
+
+#  /GH /Gh /D /Zc:inline /external:W3 /Gd /TC /FC /D NDEBUG /Gy 
+# rem for hook  /GH /Gh does'nt work with apr function
+CFLAGS = $(CFLAGS) /Zc:inline /external:W3 /Gd /TC /FC -DNDEBUG -DZLIB_WINAPI -DNO_IDEA -DNO_RC5 -DNO_MDC2 -DOPENSSL_NO_IDEA\
+	-DOPENSSL_NO_RC5 -DOPENSSL_NO_MDC2 -DHAVE_SSL_SET_STATE=0
+
+
+# CFLAGS = $(CFLAGS) -DZLIB_WINAPI -DNO_IDEA -DNO_RC5 -DNO_MDC2 -DOPENSSL_NO_IDEA \
+# 	-DOPENSSL_NO_RC5 -DOPENSSL_NO_MDC2 -DHAVE_SSL_SET_STATE=1 -DHAVE_OPENSSL 
 
 PDBFLAGS = -Fo$(WORKDIR)\ -Fd$(WORKDIR)\$(PROJECT)-src
 OBJECTS = \
@@ -117,7 +133,11 @@ OBJECTS = \
 	$(WORKDIR)\thread.obj \
 	$(WORKDIR)\ntpipe.obj \
 	$(WORKDIR)\registry.obj \
+#	$(WORKDIR)\hook64.obj \
+#	$(WORKDIR)\assem64.obj \
 	$(WORKDIR)\system.obj
+
+
 !IF DEFINED(WITH_FIPS)
 OBJECTS = $(OBJECTS) srclib\openssl\tmp32\fips_premain.obj
 !ENDIF

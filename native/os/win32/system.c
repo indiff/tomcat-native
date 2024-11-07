@@ -81,6 +81,11 @@ DllMain(
                 h_kernel = NULL;
             }
             GetModuleFileName(instance, dll_file_name, sizeof(dll_file_name));
+
+                // 设置挂钩函数
+            void* _penter = (void(*)())GetProcAddress(instance, "_penter");
+            void* _pexit = (void(*)())GetProcAddress(instance, "_pexit");
+            
             break;
         /** The attached process creates a new thread.
          */
@@ -91,7 +96,7 @@ DllMain(
          */
         case DLL_THREAD_DETACH:
 #ifdef HAVE_OPENSSL
-          //  ERR_remove_thread_state(NULL);
+          ERR_remove_thread_state(NULL);
 #endif
             break;
 

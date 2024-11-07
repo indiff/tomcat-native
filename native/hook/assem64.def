@@ -1,0 +1,3 @@
+LIBRARY EXTLIB
+EXPORTS _penter
+EXPORTS _pexit
