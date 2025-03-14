@@ -86,7 +86,7 @@ jobs:
       shell: cmd
       run: |
         git clone -b main.nossl --depth 1 https://github.com/indiff/tomcat-native.git ${{github.workspace}}\tcnative
-        cd native
+        cd ${{github.workspace}}\tcnative\native
         echo %JAVA_HOME_8_X64%
         set JAVA_HOME=%JAVA_HOME_8_X64%
         set WINVER=WIN7
@@ -106,5 +106,5 @@ jobs:
           retention-days: 5 # 保留期 
           compression-level: 9 # 压缩级别
           path: |
-            ${{github.workspace}}/tcnative/WIN7_X64_DLL_RELEASE/*.7z
+            ${{github.workspace}}/tcnative/native/WIN7_X64_DLL_RELEASE/*.7z
         
