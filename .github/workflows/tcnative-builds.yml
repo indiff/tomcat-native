@@ -46,6 +46,7 @@ jobs:
         cd ${{github.workspace}}\apr
         cmake -B build -DCMAKE_INSTALL_PREFIX=c:\apr -DAPR_INSTALL_INCLUDE_DIR=include  -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=OFF -DAPR_BUILD_SHARED=ON -DAPR_BUILD_STATIC=OFF  -DTEST_STATIC_LIBS=${{ matrix.test-static }} -G "${{ matrix.generator }}" -A ${{ matrix.arch }} -T ${{ matrix.toolset }}
         cmake --build build --config ${{ matrix.build-type }}
+        cmake --install build --config ${{ matrix.build-type }}
         tree c:\apr
 
 
