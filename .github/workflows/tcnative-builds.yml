@@ -67,6 +67,7 @@ jobs:
         perl ..\Configure --banner=Configured --prefix=C:\openssl no-makedepend -DOSSL_WINCTX=openssl ${{ matrix.openssl-config }}
         perl configdata.pm --dump
         nmake /S
+        nmake install
 
     - name: download coreinfo
       uses: suisei-cn/actions-download-file@v1.6.0
@@ -80,7 +81,6 @@ jobs:
       run: |
         7z.exe x coreinfo/Coreinfo.zip
         ./Coreinfo64.exe -accepteula -f
-        ./apps/openssl.exe version -c
         
     - name: Build tcnative
       shell: cmd
@@ -97,7 +97,7 @@ jobs:
             APR_HAVE_IPV6=OFF ^
             OPENSSL_NEW_LIBS=0
         cd WIN7_X64_DLL_RELEASE
-        7z a -t7z -mx=9 tcnative.7z .\ -r
+        7z a -t7z -mx=9 tcnative.7z .\*.dll -r
         
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
