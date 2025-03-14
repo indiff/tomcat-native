@@ -28,7 +28,7 @@ jobs:
         arch: [ "x64" ] # "Win32", "x64"
         toolset: [ "v143" ]  # "v143", "v142"
         test-static: [ "OFF" ]  # "ON", "OFF"
-        openssl-config: no-threads no-shared no-tests enable-fips no-thread-pool no-quic
+        openssl-config: [ "no-threads no-shared no-tests enable-fips no-thread-pool no-quic" ]
       fail-fast: false
     
     name: "MSVC ${{ matrix.toolset }} ${{ matrix.arch }} [${{ matrix.build-type }}] test-static=${{ matrix.test-static }} on ${{ matrix.os }}"
