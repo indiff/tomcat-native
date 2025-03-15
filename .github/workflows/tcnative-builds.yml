@@ -57,9 +57,8 @@ jobs:
         cmake -B build -DCMAKE_INSTALL_PREFIX=c:\apr -DAPR_INSTALL_INCLUDE_DIR=include  -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=OFF -DAPU_HAVE_SQLITE3=OFF -DAPU_HAVE_ODBC=OFF -DBUILD_SHARED_LIBS=ON -DAPR_MODULAR_DSO=ON -DAPR_INSTALL_PRIVATE_H=ON -DTEST_STATIC_LIBS=${{ matrix.test-static }} -DVCPKG_TARGET_TRIPLET=x64-window -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -G "Ninja"
         cmake --build build --config ${{ matrix.build-type }}
         cmake --install build --config ${{ matrix.build-type }}
-        tree c:\apr
-        cp C:/apr/lib/libapr-2.lib C:/apr/lib/libapr-1.lib
-
+        cp C:/apr/lib/libapr-2.lib C:/apr/lib/apr-1.lib
+        tree c:\apr /F
 
 
 
