@@ -104,7 +104,7 @@ jobs:
             APR_HAVE_IPV6=OFF ^
             OPENSSL_NEW_LIBS=0
         cd WIN7_X64_DLL_RELEASE
-        7z a -t7z -mx=9 tcnative.7z .\*.dll -r
+        #7z a -t7z -mx=9 tcnative.7z .\*.dll -r
         
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -113,5 +113,5 @@ jobs:
           retention-days: 5 # 保留期 
           compression-level: 9 # 压缩级别
           path: |
-            ${{github.workspace}}/tcnative/native/WIN7_X64_DLL_RELEASE/*.7z
+            ${{github.workspace}}/tcnative/native/WIN7_X64_DLL_RELEASE/*.dll
         
