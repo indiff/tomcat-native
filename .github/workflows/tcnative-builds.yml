@@ -58,6 +58,8 @@ jobs:
         cmake --build build --config ${{ matrix.build-type }}
         cmake --install build --config ${{ matrix.build-type }}
         tree c:\apr
+        cp C:/apr/lib/libapr-2.lib C:/apr/lib/libapr-1.lib
+
 
 
 
