@@ -29,9 +29,10 @@ jobs:
         toolset: [ "v143" ]  # "v143", "v142"
         test-static: [ "OFF" ]  # "ON", "OFF"
         openssl-config: [ "no-threads no-shared no-tests enable-fips no-thread-pool no-quic" ]
+        tc_branches: [ "main.nossl"]
       fail-fast: false
     
-    name: "MSVC ${{ matrix.toolset }} ${{ matrix.arch }} [${{ matrix.build-type }}] test-static=${{ matrix.test-static }} on ${{ matrix.os }}"
+    name: "MSVC build tcnative.dll ${{ matrix.arch }} ${{ matrix.os }} ${{matrix.tc_branches}}"
     # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
     # You can convert this to a matrix build if you need cross-platform coverage.
     # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
@@ -89,7 +90,7 @@ jobs:
     - name: Build tcnative
       shell: cmd
       run: |
-        git clone -b main.nossl --depth 1 https://github.com/indiff/tomcat-native.git ${{github.workspace}}\tcnative
+        git clone -b ${{matrix.tc_branches}} --depth 1 https://github.com/indiff/tomcat-native.git ${{github.workspace}}\tcnative
         cd ${{github.workspace}}\tcnative\native
         echo %JAVA_HOME_8_X64%
         set JAVA_HOME=%JAVA_HOME_8_X64%
@@ -106,7 +107,7 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-          name: apr.${{ matrix.build-type }}.${{ matrix.arch}}
+          name: apr.${{ matrix.build-type }}.${{ matrix.arch}}.${{matrix.tc_branches}}
           retention-days: 5 # 保留期 
           compression-level: 9 # 压缩级别
           path: |
