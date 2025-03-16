@@ -29,7 +29,7 @@ jobs:
         toolset: [ "v143" ]  # "v143", "v142"
         test-static: [ "OFF" ]  # "ON", "OFF"
         openssl-config: [ "no-threads no-shared no-tests enable-fips no-thread-pool no-quic" ]
-        tc_branches: [ "main.nossl"]
+        tc_branches: [ "main.nossl", "1.3.x.nossl"]
       fail-fast: false
     
     name: "MSVC build tcnative.dll ${{ matrix.arch }} ${{ matrix.os }} ${{matrix.tc_branches}}"
