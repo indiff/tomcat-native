@@ -100,9 +100,10 @@ jobs:
           make install
 
           git clone -b ${{matrix.tc_branches}} --depth 1 https://github.com/indiff/tomcat-native.git /opt/tcnative
-          cd /opt/tcnative
+          cd /opt/tcnative/native
+          ./buildconf
           export JAVA_HOME=$(readlink -f $(which java) | sed 's|/jre/bin/java||')
-          ./configure --with-apr=/temp/apr \
+          ./configure --with-apr=/tmp/apr \
             --with-java-home=$JAVA_HOME \
             --with-ssl=/tmp/openssl \
             --prefix=/workspace
