@@ -51,7 +51,7 @@ jobs:
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: |
         if ("${{ matrix.tc_branches }}" -eq "1.3.x.nossl" ) {
-            git clone --depth 1 -b 1.8.x https://github.com/indiff/apr.git ${{github.workspace}}\apr
+            git clone --depth 1 -b 1.7.x https://github.com/indiff/apr.git ${{github.workspace}}\apr
         } else {
             git clone --depth 1 https://github.com/indiff/apr.git ${{github.workspace}}\apr
         }
@@ -60,7 +60,7 @@ jobs:
         # cmake -B build -DCMAKE_INSTALL_PREFIX=c:\apr -DAPR_INSTALL_INCLUDE_DIR=include  -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=OFF -DAPR_BUILD_SHARED=ON -DAPR_BUILD_STATIC=ON  -DTEST_STATIC_LIBS=${{ matrix.test-static }} -G "${{ matrix.generator }}" -A ${{ matrix.arch }} -T ${{ matrix.toolset }}
         # call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64
         # cmake -B build -DCMAKE_INSTALL_PREFIX=c:\apr -DAPR_INSTALL_INCLUDE_DIR=include  -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=OFF -DAPU_HAVE_SQLITE3=OFF -DAPU_HAVE_ODBC=OFF -DBUILD_SHARED_LIBS=ON -DAPR_MODULAR_DSO=ON -DAPR_INSTALL_PRIVATE_H=ON -DTEST_STATIC_LIBS=${{ matrix.test-static }} -G "${{ matrix.generator }}" -A ${{ matrix.arch }} -T ${{ matrix.toolset }}
-        cmake -B build -DCMAKE_INSTALL_PREFIX=c:\apr -DAPR_INSTALL_INCLUDE_DIR=include  -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=OFF -DAPU_HAVE_SQLITE3=OFF -DAPU_HAVE_ODBC=OFF -DBUILD_SHARED_LIBS=ON -DAPR_MODULAR_DSO=ON -DAPR_INSTALL_PRIVATE_H=ON -DTEST_STATIC_LIBS=${{ matrix.test-static }} -DVCPKG_TARGET_TRIPLET=x64-window -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -G "Ninja"
+        cmake -B build -DCMAKE_INSTALL_PREFIX=c:\apr -DINSTALL_PDB=OFF -DAPR_INSTALL_INCLUDE_DIR=include  -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=OFF -DAPU_HAVE_SQLITE3=OFF -DAPU_HAVE_ODBC=OFF -DBUILD_SHARED_LIBS=ON -DAPR_MODULAR_DSO=ON -DAPR_INSTALL_PRIVATE_H=ON -DTEST_STATIC_LIBS=${{ matrix.test-static }} -DVCPKG_TARGET_TRIPLET=x64-window -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -G "Ninja"
         cmake --build build --config ${{ matrix.build-type }} --parallel
         cmake --install build --config ${{ matrix.build-type }}
         if (Test-Path -Path "C:/apr/lib/libapr-2.lib") {
