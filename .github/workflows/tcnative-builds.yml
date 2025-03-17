@@ -1,4 +1,4 @@
-name: tcnative build
+ename: tcnative build
 
 # 调整 action 规则
 on:
@@ -85,8 +85,7 @@ jobs:
           git clone --depth 1 https://github.com/indiff/apr.git /opt/apr
           cd /opt/apr
           ./buildconf
-          CC="gcc -m64" ./configure --prefix=/tmp/apr 
-          # ${{ matrix.apr-config }}
+          CC="gcc -m64" ./configure --prefix=/tmp/apr ${{ matrix.apr-config }}
           make -j$(nproc)
           make install
 
@@ -95,7 +94,8 @@ jobs:
           cd /opt/openssl
           mkdir _build
           cd _build
-          perl ..\Configure --banner=Configured --prefix=/tmp/openssl ${{ matrix.openssl-config }}
+          perl ../Configure --banner=Configured --prefix=/tmp/openssl ${{ matrix.openssl-config }}
+          perl configdata.pm --dump
           make -j$(nproc)
           make install
 
