@@ -91,7 +91,7 @@ DllMain(
          */
         case DLL_THREAD_DETACH:
 #ifdef HAVE_OPENSSL
-            ERR_remove_thread_state(NULL);
+          //  ERR_remove_thread_state(NULL);
 #endif
             break;
 
