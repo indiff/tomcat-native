@@ -1,4 +1,4 @@
-ename: tcnative build
+name: tcnative build
 
 # 调整 action 规则
 on:
