@@ -105,7 +105,7 @@ jobs:
           --with-ssl=/tmp/openssl \
           --prefix=/workspace/apr
           export JAVA_HOME=$(readlink -f $(which java) | sed 's|/jre/bin/java||')
-          ./configure --with-apr=/opt/apr \
+          ./configure --with-apr=/tmp/apr \
             --with-java-home=$JAVA_HOME \
             --with-ssl=/tmp/openssl \
             --prefix=/workspace/apr
