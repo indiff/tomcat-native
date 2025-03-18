@@ -130,6 +130,7 @@ jobs:
           export glib_version="$(cat glibc_version.txt)"
           # echo "BUILD_VERSION_TIMESTAMP=${{ needs.before_build.outputs.TC_VERSION }}_${build_timestamp}_glibc${glib_version}" >> $GITHUB_ENV
           echo "BUILD_VERSION_TIMESTAMP=${{matrix.tc_branches}}_${build_timestamp}_glibc${glib_version}" >> $GITHUB_ENV
+          tree /workspace
           
 
       - name: Upload tc package
@@ -140,7 +141,7 @@ jobs:
           compression-level: 9
           include-hidden-files: true
           path: |
-            /workspace/tcnative/**/*
+            /workspace/**/*
 
   build-in-windows:
     needs: before_build
