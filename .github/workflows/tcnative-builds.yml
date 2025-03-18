@@ -104,7 +104,7 @@ jobs:
 
           git clone -b ${{matrix.tc_branches}} --depth 1 https://github.com/indiff/tomcat-native.git /opt/tcnative
           cd /opt/tcnative/native
-          ./buildconf --with-apr=/usr/local/apr/bin/apr-1-config \
+          ./buildconf --with-apr=/opt/apr \
                       --with-ssl=/usr/local/openssl
           export JAVA_HOME=$(readlink -f $(which java) | sed 's|/jre/bin/java||')
           ./configure --with-apr=/usr/local/apr \
