@@ -107,10 +107,11 @@ jobs:
           ./buildconf --with-apr=/opt/apr \
                       --with-ssl=/usr/local/openssl
           export JAVA_HOME=$(readlink -f $(which java) | sed 's|/jre/bin/java||')
+          mkdir -p /workspace/tc
           ./configure --with-apr=/usr/local/apr/bin/apr-2-config \
             --with-java-home=$JAVA_HOME \
             --with-ssl=/usr/local/openssl \
-            --prefix=/workspace
+            --prefix=/workspace/tc
             
           make -j$(nproc)
           make install
@@ -134,9 +135,7 @@ jobs:
         with:
           name: tc-centos7-${{ env.BUILD_VERSION_TIMESTAMP }}
           path: |
-            /workspace/*.txt
-            /workspace/*.so
-            /workspace/**/*.so
+            /workspace/tc/
 
   build-in-windows:
     needs: before_build
@@ -207,7 +206,11 @@ jobs:
         nmake install
 
     - name: Install dependencies
-      run: vcpkg install --triplet ${{ matrix.triplet }} apr[private-headers] apr-util pcre2 openssl
+      if: true
+      run: vcpkg install --triplet ${{ matrix.triplet }} openssl
+      # run: vcpkg install --triplet ${{ matrix.triplet }} apr[private-headers] apr-util pcre2 openssl
+      #  -DAPR_INCLUDE_DIR=C:/vcpkg/installed/${{ matrix.triplet }}/include ^
+      # "-DAPR_LIBRARIES=C:/vcpkg/installed/${{ matrix.triplet }}/lib/libapr-1.lib;C:/vcpkg/installed/${{ matrix.triplet }}/lib/libaprutil-1.lib"
 
     - name: download coreinfo
       uses: suisei-cn/actions-download-file@v1.6.0
@@ -232,7 +235,7 @@ jobs:
         set WINVER=WIN7
         nmake -f NMAKEMakefile BUILD_CPU=x64 ^
             WITH_APR=c:\apr ^
-            WITH_OPENSSL=c:\openssl ^
+            WITH_OPENSSL=C:\vcpkg\packages\openssl_${{ matrix.triplet }} ^
             APR_DECLARE_STATIC=1 ^
             APR_HAVE_IPV6=OFF ^
             OPENSSL_NEW_LIBS=0
