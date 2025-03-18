@@ -107,11 +107,11 @@ jobs:
           ./buildconf --with-apr=/opt/apr \
                       --with-ssl=/usr/local/openssl
           export JAVA_HOME=$(readlink -f $(which java) | sed 's|/jre/bin/java||')
-          mkdir -p /workspace/tc
+          mkdir -p /workspace/tcnative
           ./configure --with-apr=/usr/local/apr/bin/apr-2-config \
             --with-java-home=$JAVA_HOME \
             --with-ssl=/usr/local/openssl \
-            --prefix=/workspace/tc
+            --prefix=/workspace/tcnative
             
           make -j$(nproc)
           make install
@@ -124,18 +124,23 @@ jobs:
         run: |
           sudo timedatectl set-timezone Asia/Shanghai
           timedatectl status
+          sudo mkdir -p /workspace/tcnative
           docker run --cpus="$(nproc --all)" -u root --rm -v ${{ github.workspace }}:/workspace -w /workspace centos:7 /bin/bash -c "/workspace/build.sh"
           export build_timestamp="$(date +'%Y%m%d_%H%M')"
           export glib_version="$(cat glibc_version.txt)"
-          echo "BUILD_VERSION_TIMESTAMP=${{ needs.before_build.outputs.TC_VERSION }}_${build_timestamp}_glibc${glib_version}" >> $GITHUB_ENV
+          # echo "BUILD_VERSION_TIMESTAMP=${{ needs.before_build.outputs.TC_VERSION }}_${build_timestamp}_glibc${glib_version}" >> $GITHUB_ENV
+          echo "BUILD_VERSION_TIMESTAMP=${{matrix.tc_branches}}_${build_timestamp}_glibc${glib_version}" >> $GITHUB_ENV
           
 
       - name: Upload tc package
         uses: actions/upload-artifact@v4
         with:
-          name: tc-centos7-${{ env.BUILD_VERSION_TIMESTAMP }}
+          name: tcnative-centos7-${{ env.BUILD_VERSION_TIMESTAMP }}
+          retention-days: 5
+          compression-level: 9
+          include-hidden-files: true
           path: |
-            /workspace/tc/
+            /workspace/tcnative/**/*
 
   build-in-windows:
     needs: before_build
@@ -245,8 +250,9 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-          name: apr.${{ matrix.build-type }}.${{ matrix.arch}}.${{matrix.tc_branches}}
+          name: tcnative-windows-${{ matrix.build-type }}-${{ matrix.arch}}-${{matrix.tc_branches}}
           retention-days: 5 # 保留期 
           compression-level: 9 # 压缩级别
+          include-hidden-files: true
           path: |
             ${{github.workspace}}/tcnative/native/WIN7_X64_DLL_RELEASE/*.dll
