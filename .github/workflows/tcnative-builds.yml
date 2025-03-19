@@ -266,9 +266,11 @@ jobs:
   publish_release:
     name: Publish release
     #if: ${{ !cancelled() && ( github.event_name == 'schedule' || github.event.inputs.doRelease == 'true' ) }}
-    needs: [build-in-centos7, build-in-windows] 
+    needs: [before_build, build-in-centos7, build-in-windows] 
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -296,8 +298,8 @@ jobs:
           (cd ${cdir}/artifacts && sha256sum *.{zip,tar.xz,7z} > checksums.sha256)
           export build_timestamp="$(date +'%Y%m%d_%H%M')"
 
-          echo -e "> Automated release created by GitHub Actions.\n" > ${{ github.workspace }}/RELEASE.md
-          cat <<'EOF' > ${{ github.workspace }}/RELEASE.md
+          echo -e "> # Automated release created by GitHub Actions.\n" > ${{ github.workspace }}/RELEASE.md
+          cat <<'EOF' >> ${{ github.workspace }}/RELEASE.md
           ```
           # Backup current SSH config
           [[ -f /etc/ssh/sshd_config ]] && mv /etc/ssh/sshd_config /etc/ssh/sshd_config.$(date +%Y%m%d)
@@ -356,6 +358,5 @@ jobs:
           git tag -l --format='%(contents)' "${TAGNAME}" | tee -a ${{ github.workspace }}/RELEASE.md
           gh release delete --cleanup-tag --yes "$TAGNAME" || true
           gh release create "$TAGNAME" --target "main" -F ${{ github.workspace }}/RELEASE.md --title "$NAME" ${{ github.workspace }}/artifacts/*
-
         env:
           GITHUB_TOKEN: ${{ github.token }}
