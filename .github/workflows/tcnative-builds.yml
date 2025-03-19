@@ -230,7 +230,7 @@ jobs:
         cd ${{github.workspace}}\openssl
         mkdir _build
         cd _build
-        perl ..\Configure --banner=Configured --prefix=C:\openssl no-makedepend -DOSSL_WINCTX=openssl ${{ matrix.openssl-config }}
+        perl ..\Configure --banner=Configured --prefix=C:\vcpkg\packages\openssl_${{ matrix.triplet }} no-makedepend -DOSSL_WINCTX=openssl ${{ matrix.openssl-config }}
         perl configdata.pm --dump
         nmake /S
         nmake install
