@@ -121,6 +121,8 @@ jobs:
             
           make -j$(nproc)
           make install
+
+          cp -f /usr/local/apr/lib/* /workspace/tcnative/lib/
           echo $(cut -d- -f2 <<<$(rpm -q glibc)) >> /workspace/glibc_version.txt
           EOF
           chmod +x build.sh
@@ -329,16 +331,14 @@ jobs:
           # For Unix
           LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CATALINA_HOME/lib
           export LD_LIBRARY_PATH
-
-          sed -i '1i\export LD_LIBRARY_PATH' catalina.sh
-          sed -i '1i\LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CATALINA_HOME/lib' catalina.sh
           ```
           ```
           yum install -y java-1.8.0-openjdk-devel.x86_64 expat-devel
           ```
           ```
-          cat << 'EOF' > /var/log/tcnative.log
-          demo
+          cat << 'EOF' > setenv.sh
+          LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CATALINA_HOME/lib
+          export LD_LIBRARY_PATH
           shitshit
           ```
           EOF
