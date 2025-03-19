@@ -345,7 +345,7 @@ jobs:
           shitshit
           ```
           EOF
-          sed -i 's/shitshit/EOF/g' RELEASE.md
+          sed -i 's/shitshit/EOF/g' ${{ github.workspace }}/RELEASE.md
 
           NAME="${{ needs.before_build.outputs.TC_VERSION1 }}_${{ needs.before_build.outputs.TC_VERSION1 }}_${build_timestamp}"
           TAGNAME="${NAME}"
