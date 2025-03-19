@@ -22,16 +22,21 @@ jobs:
   before_build:
     runs-on: [ ubuntu-latest ]
     outputs:
-      TC_VERSION: ${{ steps.get.outputs.TC_VERSION }}
+      TC_VERSION1: ${{ steps.get.outputs.TC_VERSION1 }}
+      TC_VERSION2: ${{ steps.get.outputs.TC_VERSION2 }}
     # https://docs.github.com/zh/actions/writing-workflows/choosing-what-your-workflow-does/passing-information-between-jobs#%E7%A4%BA%E4%BE%8B%E5%AE%9A%E4%B9%89%E4%BD%9C%E4%B8%9A%E7%9A%84%E8%BE%93%E5%87%BA  
     steps:
       - name: Get version
         id: get
         run: |
           set -xe
-          curl -sLO https://github.com/indiff/tomcat-native/raw/refs/heads/main/native/os/win32/libtcnative.rc
-          export version=$(grep -oP '#define TCN_VERSION\s+"\K[\d.]+' libtcnative.rc | head -1)
-          echo "TC_VERSION=${version}" >> "$GITHUB_OUTPUT"
+          curl -sLO https://github.com/indiff/tomcat-native/raw/refs/heads/main.nossl/native/os/win32/libtcnative.rc
+          export version1=$(grep -oP '#define TCN_VERSION\s+"\K[\d.]+' libtcnative.rc | head -1)
+          rm -f libtcnative.rc
+          curl -sLO https://github.com/indiff/tomcat-native/raw/refs/heads/1.3.x.nossl/native/os/win32/libtcnative.rc
+          export version2=$(grep -oP '#define TCN_VERSION\s+"\K[\d.]+' libtcnative.rc | head -1)
+          echo "TC_VERSION1=${version1}" >> "$GITHUB_OUTPUT"
+          echo "TC_VERSION2=${version2}" >> "$GITHUB_OUTPUT"
 
   build-in-centos7:
     needs: before_build
@@ -256,3 +261,101 @@ jobs:
           include-hidden-files: true
           path: |
             ${{github.workspace}}/tcnative/native/WIN7_X64_DLL_RELEASE/*.dll
+
+
+  publish_release:
+    name: Publish release
+    #if: ${{ !cancelled() && ( github.event_name == 'schedule' || github.event.inputs.doRelease == 'true' ) }}
+    needs: [build-in-centos7, build-in-windows] 
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tcnative-*
+          merge-multiple: false
+          path: artifacts
+      - name: Update Latest
+        run: |
+          set -xe
+          shopt -s nullglob
+          sudo timedatectl set-timezone Asia/Shanghai
+          timedatectl status
+          # repack zip for dir
+          cdir="$(pwd)"
+          for dir in artifacts/*/; do
+            the_dir=`basename "${cdir}/${dir}"`
+            if [[ -d "${cdir}/artifacts/${the_dir}" ]]; then
+              echo "Directory exists ${the_dir}."
+              cd "${cdir}/artifacts/${the_dir}"
+              zip -r -q -9 "${cdir}/artifacts/${the_dir}.zip" .
+              cd ..
+              rm -rf "${the_dir}"
+            fi         
+          done
+          (cd ${cdir}/artifacts && sha256sum *.{zip,tar.xz,7z} > checksums.sha256)
+          export build_timestamp="$(date +'%Y%m%d_%H%M')"
+
+          echo -e "> Automated release created by GitHub Actions.\n" > ${{ github.workspace }}/RELEASE.md
+          cat <<'EOF' > ${{ github.workspace }}/RELEASE.md
+          ```
+          # Backup current SSH config
+          [[ -f /etc/ssh/sshd_config ]] && mv /etc/ssh/sshd_config /etc/ssh/sshd_config.$(date +%Y%m%d)
+
+          # Install rpm packages. Exclude all debug packages.
+          find . ! -name '*debug*' -name '*.rpm' | xargs sudo yum --disablerepo=* localinstall -y --allowerasing
+
+          # fix by packages.
+          yum install -y libICE libSM libX11 libXt
+          yum update -y
+          find . ! -name '*debug*' -name '*.rpm' | xargs sudo yum --disablerepo=* localinstall -y --skip-broken
+
+          # in case host key files got permissions too open.
+          chmod -v 600 /etc/ssh/ssh_host_*_key
+
+          # For CentOS7+:
+          # in some cases previously installed systemd unit file is left on disk after upgrade.
+          # causes systemd mixing unit files and initscripts units provided by this package.
+          if [[ -d /run/systemd/system && -f /usr/lib/systemd/system/sshd.service ]]; then
+              mv /usr/lib/systemd/system/sshd.service /usr/lib/systemd/system/sshd.service.$(date +%Y%m%d)
+              systemctl daemon-reload
+          fi
+
+          # Check Installed version:
+          ssh -V && /usr/sbin/sshd -V
+
+          # Restart service
+          service sshd restart
+          ```
+          ```
+          yum erase openssh-askpass openssh-keycat openssh-cavs openssh-askpass openssh-askpass-gnome openssh-debuginfo
+          rpm -ivh --force --nodeps --replacepkgs --replacefiles openssh-*.rpm
+          ```
+          ```
+          cat << 'EOF' > /etc/ssh/sshd_config
+          Port 22
+          Port 80
+          AddressFamily inet
+          PubkeyAcceptedAlgorithms +ssh-rsa
+          PermitRootLogin yes
+          PasswordAuthentication yes
+          UseDNS no
+          UsePAM yes
+          KexAlgorithms -diffie-hellman-group1-sha1,diffie-hellman-group1-sha256,diffie-hellman-group14-sha1,diffie-hellman-group14-sha256,diffie-hellman-group15-sha256,diffie-hellman-group15-sha512,diffie-hellman-group16-sha256,diffie-hellman-group16-sha512,diffie-hellman-group17-sha512,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha1,diffie-hellman-group-exchange-sha256,diffie-hellman-group-exchange-sha512
+          shitshit
+          ```
+          EOF
+          sed -i 's/shitshit/EOF/g' RELEASE.md
+
+          NAME="${{ needs.before_build.outputs.TC_VERSION1 }}_${{ needs.before_build.outputs.TC_VERSION1 }}_${build_timestamp}"
+          TAGNAME="${NAME}"
+          # TAGNAME="last"
+          checksums=$(cat ${cdir}/artifacts/checksums.sha256)
+          gh release delete --cleanup-tag --yes "$TAGNAME" || true
+          # sleep 15
+          git tag -l --format='%(contents)' "${TAGNAME}" | tee -a ${{ github.workspace }}/RELEASE.md
+          gh release delete --cleanup-tag --yes "$TAGNAME" || true
+          gh release create "$TAGNAME" --target "main" -F ${{ github.workspace }}/RELEASE.md --title "$NAME" ${{ github.workspace }}/artifacts/*
+
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
