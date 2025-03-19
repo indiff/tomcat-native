@@ -169,6 +169,23 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+
+    - name: Reset Chinese Timestamp
+      id: version_timestamp
+      shell: pwsh
+      run: |
+         Set-TimeZone -Id "China Standard Time"
+         tzutil /s "China Standard Time"
+         taskkill /f /im explorer.exe
+         start explorer.exe
+         sleep 2
+         echo "Restart Explorer for TimeZone"
+         $mem = Get-WmiObject Win32_OperatingSystem
+         echo "Time:$(Get-Date)"
+         echo "Mem:$([math]::round((($mem.TotalVisibleMemorySize - $mem.FreePhysicalMemory) / $mem.TotalVisibleMemorySize) * 100, 2))%"
+         echo "CPU:$(Get-WmiObject -Class Win32_Processor | Select-Object -ExpandProperty LoadPercentage)%"
+         Write-Output "BUILD_VERSION_TIMESTAMP=$(Get-Date -Format "yyyyMMdd_HHmm")" >> $env:GITHUB_ENV
+
     - uses: ilammy/msvc-dev-cmd@v1
       with:
         arch: win64
@@ -255,7 +272,7 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-          name: tcnative-windows-${{ matrix.build-type }}-${{ matrix.arch}}-${{matrix.tc_branches}}
+          name: tcnative-windows-${{ matrix.build-type }}-${{ matrix.arch}}-${{matrix.tc_branches}}_${{ env.BUILD_VERSION_TIMESTAMP }}
           retention-days: 5 # 保留期 
           compression-level: 9 # 压缩级别
           include-hidden-files: true
@@ -349,7 +366,7 @@ jobs:
           EOF
           sed -i 's/shitshit/EOF/g' ${{ github.workspace }}/RELEASE.md
 
-          NAME="${{ needs.before_build.outputs.TC_VERSION1 }}_${{ needs.before_build.outputs.TC_VERSION1 }}_${build_timestamp}"
+          NAME="${{ needs.before_build.outputs.TC_VERSION1 }}_${{ needs.before_build.outputs.TC_VERSION2 }}_${build_timestamp}"
           TAGNAME="${NAME}"
           # TAGNAME="last"
           checksums=$(cat ${cdir}/artifacts/checksums.sha256)
