@@ -122,7 +122,7 @@ jobs:
           make -j$(nproc)
           make install
 
-          cp -f /usr/local/apr/lib/* /workspace/tcnative/lib/
+          cp -rf /usr/local/apr/lib/ /workspace/tcnative/
           echo $(cut -d- -f2 <<<$(rpm -q glibc)) >> /workspace/glibc_version.txt
           EOF
           chmod +x build.sh
