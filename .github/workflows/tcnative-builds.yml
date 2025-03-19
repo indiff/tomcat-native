@@ -46,6 +46,7 @@ jobs:
         apr-config: [ "--enable-static --disable-ipv6 --with-odbc=no" ]
         openssl-config: [ "--strict-warnings no-threads no-shared no-tests enable-fips no-thread-pool no-quic" ]
         tc_branches: [ "main.nossl", "1.3.x.nossl"]
+        apr_branch: [ "1.8.x"]
       fail-fast: false
         
     name: "tcnative.so ${{matrix.tc_branches}} ${{ matrix.arch }} build in centos7 "
@@ -87,7 +88,7 @@ jobs:
           yum update -y
           yum install -y gcc sudo zlib-devel make git wget sed zip systemd autoconf automake libtool java-1.8.0-openjdk-devel.x86_64 pkgconfig expat-devel
           yum install -y perl-Test-Simple perl-FindBin perl-IPC-Cmd perl-Text-Template perl-File-Compare perl-File-Copy perl-Data-Dumper perl-Digest-SHA
-          git clone --depth 1 https://github.com/indiff/apr.git /opt/apr
+          git clone --depth 1 -b ${{ matrix.apr_branch }} https://github.com/indiff/apr.git /opt/apr
           cd /opt/apr
           ./buildconf
           CC="gcc -m64" ./configure --prefix=/usr/local/apr ${{ matrix.apr-config }}
@@ -159,6 +160,7 @@ jobs:
         test-static: [ "OFF" ]  # "ON", "OFF"
         openssl-config: [ "no-threads no-shared no-tests enable-fips no-thread-pool no-quic" ]
         tc_branches: [ "main.nossl", "1.3.x.nossl"]
+        apr_branch: [ "1.8.x"]
         triplet: [ x64-windows ]
       fail-fast: false
     
@@ -197,11 +199,12 @@ jobs:
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: |
-        if ("${{ matrix.tc_branches }}" -eq "1.3.x.nossl" ) {
-            git clone --depth 1 -b 1.8.x https://github.com/indiff/apr.git ${{github.workspace}}\apr
-        } else {
-            git clone --depth 1 https://github.com/indiff/apr.git ${{github.workspace}}\apr
-        }
+        # if ("${{ matrix.tc_branches }}" -eq "1.3.x.nossl" ) {
+        #     git clone --depth 1 -b 1.8.x https://github.com/indiff/apr.git ${{github.workspace}}\apr
+        # } else {
+        #     git clone --depth 1 https://github.com/indiff/apr.git ${{github.workspace}}\apr
+        # }
+        git clone --depth 1 -b ${{ matrix.apr_branch }} https://github.com/indiff/apr.git ${{github.workspace}}\apr
         
         cd ${{github.workspace}}\apr
         # cmake -B build -DCMAKE_INSTALL_PREFIX=c:\apr -DAPR_INSTALL_INCLUDE_DIR=include  -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=OFF -DAPR_BUILD_SHARED=ON -DAPR_BUILD_STATIC=ON  -DTEST_STATIC_LIBS=${{ matrix.test-static }} -G "${{ matrix.generator }}" -A ${{ matrix.arch }} -T ${{ matrix.toolset }}
@@ -221,7 +224,7 @@ jobs:
     - name: Build Openssl static library
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      if: false
+      if: true
       run: |
         git clone --depth 1 https://github.com/openssl/openssl.git ${{github.workspace}}\openssl
         cd ${{github.workspace}}\openssl
@@ -233,7 +236,7 @@ jobs:
         nmake install
 
     - name: Install dependencies
-      if: true
+      if: false
       run: vcpkg install --triplet ${{ matrix.triplet }} openssl
       # run: vcpkg install --triplet ${{ matrix.triplet }} apr[private-headers] apr-util pcre2 openssl
       #  -DAPR_INCLUDE_DIR=C:/vcpkg/installed/${{ matrix.triplet }}/include ^
@@ -318,49 +321,24 @@ jobs:
           echo -e "> # Automated release created by GitHub Actions.\n" > ${{ github.workspace }}/RELEASE.md
           cat <<'EOF' >> ${{ github.workspace }}/RELEASE.md
           ```
-          # Backup current SSH config
-          [[ -f /etc/ssh/sshd_config ]] && mv /etc/ssh/sshd_config /etc/ssh/sshd_config.$(date +%Y%m%d)
+          # Config Tomcat
+          <Listener className="org.apache.catalina.core.AprLifecycleListener" />
 
-          # Install rpm packages. Exclude all debug packages.
-          find . ! -name '*debug*' -name '*.rpm' | xargs sudo yum --disablerepo=* localinstall -y --allowerasing
+          # For Windows
+          set PATH=%PATH%;C:\your\path\to\tc-native-dll
+          # For Unix
+          LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CATALINA_HOME/lib
+          export LD_LIBRARY_PATH
 
-          # fix by packages.
-          yum install -y libICE libSM libX11 libXt
-          yum update -y
-          find . ! -name '*debug*' -name '*.rpm' | xargs sudo yum --disablerepo=* localinstall -y --skip-broken
-
-          # in case host key files got permissions too open.
-          chmod -v 600 /etc/ssh/ssh_host_*_key
-
-          # For CentOS7+:
-          # in some cases previously installed systemd unit file is left on disk after upgrade.
-          # causes systemd mixing unit files and initscripts units provided by this package.
-          if [[ -d /run/systemd/system && -f /usr/lib/systemd/system/sshd.service ]]; then
-              mv /usr/lib/systemd/system/sshd.service /usr/lib/systemd/system/sshd.service.$(date +%Y%m%d)
-              systemctl daemon-reload
-          fi
-
-          # Check Installed version:
-          ssh -V && /usr/sbin/sshd -V
-
-          # Restart service
-          service sshd restart
+          sed -i '1i\export LD_LIBRARY_PATH' catalina.sh
+          sed -i '1i\LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CATALINA_HOME/lib' catalina.sh
           ```
           ```
-          yum erase openssh-askpass openssh-keycat openssh-cavs openssh-askpass openssh-askpass-gnome openssh-debuginfo
-          rpm -ivh --force --nodeps --replacepkgs --replacefiles openssh-*.rpm
+          yum install -y java-1.8.0-openjdk-devel.x86_64 expat-devel
           ```
           ```
-          cat << 'EOF' > /etc/ssh/sshd_config
-          Port 22
-          Port 80
-          AddressFamily inet
-          PubkeyAcceptedAlgorithms +ssh-rsa
-          PermitRootLogin yes
-          PasswordAuthentication yes
-          UseDNS no
-          UsePAM yes
-          KexAlgorithms -diffie-hellman-group1-sha1,diffie-hellman-group1-sha256,diffie-hellman-group14-sha1,diffie-hellman-group14-sha256,diffie-hellman-group15-sha256,diffie-hellman-group15-sha512,diffie-hellman-group16-sha256,diffie-hellman-group16-sha512,diffie-hellman-group17-sha512,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha1,diffie-hellman-group-exchange-sha256,diffie-hellman-group-exchange-sha512
+          cat << 'EOF' > /var/log/tcnative.log
+          demo
           shitshit
           ```
           EOF
