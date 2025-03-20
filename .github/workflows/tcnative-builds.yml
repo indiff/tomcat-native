@@ -148,7 +148,11 @@ jobs:
           compression-level: 9
           include-hidden-files: true
           path: |
-            ${{github.workspace}}/tcnative/
+            ${{github.workspace}}/tcnative/**/*.so
+            ${{github.workspace}}/tcnative/**/*.so.0
+            !${{github.workspace}}/tcnative/**/*.la
+            !${{github.workspace}}/tcnative/**/*.a
+            !${{github.workspace}}/tcnative/**/*.exp
 
   build-in-windows:
     needs: before_build
