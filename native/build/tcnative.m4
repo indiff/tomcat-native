@@ -214,7 +214,7 @@ AC_DEFUN([TCN_FIND_SSL_TOOLKIT],[
   saved_cflags="$CFLAGS"
   saved_libs="$LIBS"
   CFLAGS="$CFLAGS $TCN_OPENSSL_INC"
-  dnl LIBS="$LIBS $TCN_OPENSSL_LIBS"
+  # remove
   LIBS="$LIBS"
 
   AC_ARG_ENABLE(openssl-version-check,
