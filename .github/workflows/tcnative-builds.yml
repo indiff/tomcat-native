@@ -114,6 +114,7 @@ jobs:
                       --with-ssl=/usr/local/openssl
           export JAVA_HOME=$(readlink -f $(which java) | sed 's|/jre/bin/java||')
           mkdir -p /workspace/tcnative
+          ./configure --help
           ./configure --with-apr=/usr/local/apr/bin/apr-1-config \
             --with-java-home=$JAVA_HOME \
             --with-ssl=/usr/local/openssl \
