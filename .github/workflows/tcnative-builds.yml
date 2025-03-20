@@ -329,11 +329,11 @@ jobs:
               cd "${cdir}/artifacts/${the_dir}"
               if [[ "$the_dir" == *"main.nossl"*  ]]; then
                   cp -rf *.dll  ${{ github.workspace }}/apache-tomcat-${LATEST_TOMCAT11}/bin/ || true
-                  cp -rf lib/  ${{ github.workspace }}/apache-tomcat-${LATEST_TOMCAT11}/lib/ || true
+                  cp -rf lib/*  ${{ github.workspace }}/apache-tomcat-${LATEST_TOMCAT11}/lib/ || true
               fi
               if [[ "$the_dir" == *"1.3.x.nossl"* ]]; then
                   cp -rf *.dll  ${{ github.workspace }}/apache-tomcat-7*/bin/ || true
-                  cp -rf lib/  ${{ github.workspace }}/apache-tomcat-7*/lib/ || true
+                  cp -rf lib/*  ${{ github.workspace }}/apache-tomcat-7*/lib/ || true
               fi
               zip -r -q -9 "${cdir}/artifacts/${the_dir}.zip" .
               cd ..
@@ -346,8 +346,8 @@ jobs:
           LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CATALINA_HOME/lib
           export LD_LIBRARY_PATH
           EOF
-          rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT7/{manager,docs,examples,host-manager}
-          rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT7/lib/*{ko,ja,de,es,fr,ru}*.jar
+          rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT7/webapps/{manager,docs,examples,host-manager}
+          rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT7/lib/*{i18n-ko,i18n-ja,i18n-de,i18n-es,i18n-fr,i18n-ru}*.jar
           zip -r -q -9 "${cdir}/artifacts/tomcat-$LATEST_TOMCAT7.zip" .
 
           cd ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT11
@@ -355,8 +355,8 @@ jobs:
           LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CATALINA_HOME/lib
           export LD_LIBRARY_PATH
           EOF
-          rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT11/{manager,docs,examples,host-manager}
-          rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT11/lib/*{ko,ja,de,es,fr,ru}*.jar
+          rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT11/webapps/{manager,docs,examples,host-manager}
+          rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT11/lib/*{i18n-ko,i18n-ja,i18n-de,i18n-es,i18n-fr,i18n-ru}*.jar
           zip -r -q -9 "${cdir}/artifacts/tomcat-$LATEST_TOMCAT11.zip" .
 
           (cd ${cdir}/artifacts && sha256sum *.{zip,tar.xz,7z} > checksums.sha256)
