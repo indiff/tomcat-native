@@ -328,8 +328,8 @@ jobs:
               echo "Directory exists ${the_dir}."
               cd "${cdir}/artifacts/${the_dir}"
               if [[ "$the_dir" == *"main.nossl"*  ]]; then
-                  cp -rf *.dll ${cdir}/artifacts/apache-tomcat-$(LATEST_TOMCAT11)/bin/ || true
-                  cp -rf lib/ ${cdir}/artifacts/apache-tomcat-$(LATEST_TOMCAT11)/lib/ || true
+                  cp -rf *.dll ${cdir}/artifacts/apache-tomcat-${LATEST_TOMCAT11}/bin/ || true
+                  cp -rf lib/ ${cdir}/artifacts/apache-tomcat-${LATEST_TOMCAT11}/lib/ || true
               fi
               if [[ "$the_dir" == *"1.3.x.nossl"* ]]; then
                   cp -rf *.dll ${cdir}/artifacts/apache-tomcat-7*/bin/ || true
@@ -348,7 +348,7 @@ jobs:
           EOF
           zip -r -q -9 "${cdir}/artifacts/tomcat-$LATEST_TOMCAT7.zip" .
 
-          cd ${cdir}/artifacts/apache-tomcat-$(LATEST_TOMCAT11)
+          cd ${cdir}/artifacts/apache-tomcat-$LATEST_TOMCAT11
           cat << 'EOF' > bin/setenv.sh
           LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CATALINA_HOME/lib
           export LD_LIBRARY_PATH
