@@ -313,9 +313,9 @@ jobs:
           LATEST_TOMCAT7=$(curl -s https://archive.apache.org/dist/tomcat/tomcat-7/ | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | sort -V -r | head -n 1)
           LATEST_TOMCAT11=$(curl -s https://archive.apache.org/dist/tomcat/tomcat-11/ | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | sort -V -r | head -n 1)
           # jdk min version 8
-          curl -sLko ${{ github.workspace }}/tomcat7.zip https://archive.apache.org/dist/tomcat/tomcat-7/v$(LATEST_TOMCAT7)/bin/apache-tomcat-$(LATEST_TOMCAT7).zip
+          curl -sLko ${{ github.workspace }}/tomcat7.zip https://archive.apache.org/dist/tomcat/tomcat-7/v$(LATEST_TOMCAT7)/bin/apache-tomcat-$LATEST_TOMCAT7.zip
           # jdk min version 17
-          curl -sLko ${{ github.workspace }}/tomcat11.zip https://archive.apache.org/dist/tomcat/tomcat-11/v$(LATEST_TOMCAT11)/bin/apache-tomcat-$(LATEST_TOMCAT11).zip
+          curl -sLko ${{ github.workspace }}/tomcat11.zip https://archive.apache.org/dist/tomcat/tomcat-11/v$(LATEST_TOMCAT11)/bin/apache-tomcat-$LATEST_TOMCAT11.zip
 
           unzip ${{ github.workspace }}/tomcat7.zip -d artifacts/
           unzip ${{ github.workspace }}/tomcat11.zip -d artifacts/
@@ -341,19 +341,19 @@ jobs:
             fi         
           done
           
-          cd ${cdir}/artifacts/apache-tomcat-$(LATEST_TOMCAT7)
+          cd ${cdir}/artifacts/apache-tomcat-$LATEST_TOMCAT7
           cat << 'EOF' > bin/setenv.sh
           LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CATALINA_HOME/lib
           export LD_LIBRARY_PATH
           EOF
-          zip -r -q -9 "${cdir}/artifacts/tomcat-$(LATEST_TOMCAT7).zip" .
+          zip -r -q -9 "${cdir}/artifacts/tomcat-$LATEST_TOMCAT7.zip" .
 
           cd ${cdir}/artifacts/apache-tomcat-$(LATEST_TOMCAT11)
           cat << 'EOF' > bin/setenv.sh
           LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CATALINA_HOME/lib
           export LD_LIBRARY_PATH
           EOF
-          zip -r -q -9 "${cdir}/artifacts/tomcat-$(LATEST_TOMCAT11).zip" .
+          zip -r -q -9 "${cdir}/artifacts/tomcat-$LATEST_TOMCAT11.zip" .
 
           (cd ${cdir}/artifacts && sha256sum *.{zip,tar.xz,7z} > checksums.sha256)
           export build_timestamp="$(date +'%Y%m%d_%H%M')"
