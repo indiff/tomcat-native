@@ -117,7 +117,7 @@ jobs:
           ./configure --help
           ./configure --with-apr=/usr/local/apr/bin/apr-1-config \
             --with-java-home=$JAVA_HOME \
-            --with-ssl=/usr/local/openssl \
+            --without-ssl \
             --prefix=/workspace/tcnative
             
           make -j$(nproc)
