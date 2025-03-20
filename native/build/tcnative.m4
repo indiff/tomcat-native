@@ -226,7 +226,7 @@ case "$use_openssl" in
         saved_cflags="$CFLAGS"
         saved_libs="$LIBS"
         CFLAGS="$CFLAGS $TCN_OPENSSL_INC"
-        LIBS="$LIBS $TCN_OPENSSL_LIBS"
+        dnl LIBS="$LIBS $TCN_OPENSSL_LIBS"
 
 AC_ARG_ENABLE(openssl-version-check,
 [AS_HELP_STRING([--disable-openssl-version-check],
