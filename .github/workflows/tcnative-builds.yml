@@ -348,6 +348,10 @@ jobs:
           EOF
           rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT7/webapps/{manager,docs,examples,host-manager}
           rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT7/lib/*{i18n-ko,i18n-ja,i18n-de,i18n-es,i18n-fr,i18n-ru}*.jar
+          # disable SSLEngine
+          sed -i 's/SSLEngine="on"/SSLEngine="off"/Ig' conf/server.xml
+          # fix chinese encoding
+          sed -i 's/encoding = UTF-8/encoding = GBK/Ig' conf/logging.properties
           zip -r -q -9 "${cdir}/artifacts/tomcat-$LATEST_TOMCAT7.zip" .
 
           cd ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT11
@@ -357,6 +361,11 @@ jobs:
           EOF
           rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT11/webapps/{manager,docs,examples,host-manager}
           rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT11/lib/*{i18n-ko,i18n-ja,i18n-de,i18n-es,i18n-fr,i18n-ru}*.jar
+          # disable SSLEngine
+          sed -i 's|<Listener className="org.apache.catalina.core.AprLifecycleListener" />|<Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="off"/>|g' conf/server.xml
+          sed -i 's/SSLEngine="on"/SSLEngine="off"/Ig' conf/server.xml
+          # fix chinese encoding
+          sed -i 's/encoding = UTF-8/encoding = GBK/Ig' conf/logging.properties
           zip -r -q -9 "${cdir}/artifacts/tomcat-$LATEST_TOMCAT11.zip" .
 
           (cd ${cdir}/artifacts && sha256sum *.{zip,tar.xz,7z} > checksums.sha256)
@@ -366,7 +375,7 @@ jobs:
           cat <<'EOF' >> ${{ github.workspace }}/RELEASE.md
           ```
           # Config Tomcat
-          <Listener className="org.apache.catalina.core.AprLifecycleListener" />
+          <Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="off" />
 
           # For Windows
           set PATH=%PATH%;C:\your\path\to\tc-native-dll
