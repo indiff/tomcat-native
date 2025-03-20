@@ -96,17 +96,17 @@ jobs:
           make install
 
 
-          #git clone --depth 1 https://github.com/openssl/openssl.git /opt/openssl
-          #cd /opt/openssl
-          #mkdir _build
-          #cd _build
-          #perl ../Configure --banner=Configured --prefix=/usr/local/openssl ${{ matrix.openssl-config }}
-          #perl configdata.pm --dump
-          #make -j$(nproc)
-          #make install
+          git clone --depth 1 https://github.com/openssl/openssl.git /opt/openssl
+          cd /opt/openssl
+          mkdir _build
+          cd _build
+          perl ../Configure --banner=Configured --prefix=/usr/local/openssl ${{ matrix.openssl-config }}
+          perl configdata.pm --dump
+          make -j$(nproc)
+          make install
           # 配置动态库路径
-          #echo "/usr/local/openssl/lib64" | sudo tee /etc/ld.so.conf.d/openssl.conf
-          #sudo ldconfig
+          echo "/usr/local/openssl/lib64" | sudo tee /etc/ld.so.conf.d/openssl.conf
+          sudo ldconfig
 
           git clone -b ${{matrix.tc_branches}} --depth 1 https://github.com/indiff/tomcat-native.git /opt/tcnative
           cd /opt/tcnative/native
@@ -117,7 +117,7 @@ jobs:
           ./configure --help
           ./configure --with-apr=/usr/local/apr/bin/apr-1-config \
             --with-java-home=$JAVA_HOME \
-            --without-ssl
+            --with-ssl=/usr/local/openssl \
             --prefix=/workspace/tcnative
             
           make -j$(nproc)
