@@ -215,8 +215,7 @@ case "$use_openssl" in
             TCN_OPENSSL_LIBS="-L$use_openssl/$ssllibdir -lssl -lcrypto"
             ;;
           *linux*|*freebsd*)
-            # TCN_OPENSSL_LIBS="-L$use_openssl/$ssllibdir -Wl,-rpath,$use_openssl/$ssllibdir -lssl -lcrypto"
-            TCN_OPENSSL_LIBS=""
+            TCN_OPENSSL_LIBS="-L$use_openssl/$ssllibdir -Wl,-rpath,$use_openssl/$ssllibdir -lssl -lcrypto"
             ;;
           *)
             TCN_OPENSSL_LIBS="-L$use_openssl/$ssllibdir -lssl -lcrypto"
