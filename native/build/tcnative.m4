@@ -189,47 +189,47 @@ case "$use_openssl" in
         AC_MSG_RESULT(not found)
         ;;
     *)
+      if test x"$use_openssl" = x
+      then
+        AC_MSG_RESULT(not found)
+        AC_MSG_ERROR([OpenSSL was not found in any of $openssldirs; use --with-ssl=/path])
+      fi
 
-  if test x"$use_openssl" = x
-  then
-    AC_MSG_RESULT(not found)
-    AC_MSG_ERROR([OpenSSL was not found in any of $openssldirs; use --with-ssl=/path])
-  fi
+      USE_OPENSSL='-DOPENSSL'
 
-  USE_OPENSSL='-DOPENSSL'
-
-  test -d $use_openssl/lib64 && ssllibdir=lib64 || ssllibdir=lib
+      test -d $use_openssl/lib64 && ssllibdir=lib64 || ssllibdir=lib
     
-  if test "$use_openssl" = "/usr"
-  then
-    TCN_OPENSSL_INC=""
-    TCN_OPENSSL_LIBS="-lssl -lcrypto"
-  else
-    TCN_OPENSSL_INC="-I$use_openssl/include"
-    case $host in
-      *-solaris*)
-        TCN_OPENSSL_LIBS="-L$use_openssl/$ssllibdir -R$use_openssl/$ssllibdir -lssl -lcrypto"
-        ;;
-      *-hp-hpux*)
-        # By default cc/aCC on HP-UX IA64 will produce 32 bit output
-        ssllibdir=lib/hpux32
-        TCN_OPENSSL_LIBS="-L$use_openssl/$ssllibdir -lssl -lcrypto"
-        ;;
-      *linux*|*freebsd*)
-        TCN_OPENSSL_LIBS="-L$use_openssl/$ssllibdir -Wl,-rpath,$use_openssl/$ssllibdir -lssl -lcrypto"
-        ;;
-      *)
-        TCN_OPENSSL_LIBS="-L$use_openssl/$ssllibdir -lssl -lcrypto"
-        ;;
-    esac
-  fi
+      if test "$use_openssl" = "/usr"
+      then
+        TCN_OPENSSL_INC=""
+        TCN_OPENSSL_LIBS="-lssl -lcrypto"
+      else
+        TCN_OPENSSL_INC="-I$use_openssl/include"
+        case $host in
+          *-solaris*)
+            TCN_OPENSSL_LIBS="-L$use_openssl/$ssllibdir -R$use_openssl/$ssllibdir -lssl -lcrypto"
+            ;;
+          *-hp-hpux*)
+            # By default cc/aCC on HP-UX IA64 will produce 32 bit output
+            ssllibdir=lib/hpux32
+            TCN_OPENSSL_LIBS="-L$use_openssl/$ssllibdir -lssl -lcrypto"
+            ;;
+          *linux*|*freebsd*)
+            # TCN_OPENSSL_LIBS="-L$use_openssl/$ssllibdir -Wl,-rpath,$use_openssl/$ssllibdir -lssl -lcrypto"
+            TCN_OPENSSL_LIBS=""
+            ;;
+          *)
+            TCN_OPENSSL_LIBS="-L$use_openssl/$ssllibdir -lssl -lcrypto"
+            ;;
+        esac
+      fi
      
-  AC_MSG_RESULT(using openssl from $use_openssl/$ssllibdir and $use_openssl/include)
+      AC_MSG_RESULT(using openssl from $use_openssl/$ssllibdir and $use_openssl/include)
 
-  saved_cflags="$CFLAGS"
-  saved_libs="$LIBS"
-  CFLAGS="$CFLAGS $TCN_OPENSSL_INC"
-  LIBS="$LIBS $TCN_OPENSSL_LIBS"
+      saved_cflags="$CFLAGS"
+      saved_libs="$LIBS"
+      CFLAGS="$CFLAGS $TCN_OPENSSL_INC"
+      LIBS="$LIBS $TCN_OPENSSL_LIBS"
 
   AC_ARG_ENABLE(openssl-version-check,
       [AS_HELP_STRING([--disable-openssl-version-check],
@@ -262,7 +262,7 @@ int main() {
   CFLAGS="$saved_cflags"
   LIBS="$saved_libs"
 esac
- 
+
 if test "x$USE_OPENSSL" != "x"
 then
   APR_ADDTO(TCNATIVE_PRIV_INCLUDES, [$TCN_OPENSSL_INC])
