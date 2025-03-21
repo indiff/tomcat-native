@@ -174,7 +174,18 @@ AC_DEFUN([TCN_FIND_SSL_TOOLKIT],[
         fi
       done
   fi
-
+case "$use_openssl" in
+    no)
+        AC_MSG_RESULT(no)
+        TCN_OPENSSL_INC=""
+        USE_OPENSSL=""
+        ;;
+    auto)
+        TCN_OPENSSL_INC=""
+        USE_OPENSSL=""
+        AC_MSG_RESULT(not found)
+        ;;
+    *)
   if test x"$use_openssl" = x
   then
     AC_MSG_RESULT(not found)
@@ -214,8 +225,7 @@ AC_DEFUN([TCN_FIND_SSL_TOOLKIT],[
   saved_cflags="$CFLAGS"
   saved_libs="$LIBS"
   CFLAGS="$CFLAGS $TCN_OPENSSL_INC"
-  # remove
-  LIBS="$LIBS"
+  LIBS="$LIBS $TCN_OPENSSL_LIBS"
 
   AC_ARG_ENABLE(openssl-version-check,
       [AS_HELP_STRING([--disable-openssl-version-check],
