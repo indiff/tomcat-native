@@ -155,8 +155,10 @@ AC_DEFUN([TCN_FIND_SSL_TOOLKIT],[
       use_openssl="$withval"
       AC_MSG_RESULT([$use_openssl])
     else
-      AC_MSG_RESULT([failed])
-      AC_MSG_ERROR([$withval is not a directory])
+	  # don't check dir 
+      # AC_MSG_RESULT([failed])
+      # AC_MSG_ERROR([$withval is not a directory])
+	  AC_MSG_RESULT([$use_openssl])
     fi
   ])
     
