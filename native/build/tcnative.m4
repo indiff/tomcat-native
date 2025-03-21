@@ -155,11 +155,11 @@ AC_DEFUN([TCN_FIND_SSL_TOOLKIT],[
       use_openssl="$withval"
       AC_MSG_RESULT([$use_openssl])
     else
-	  # don't check dir 
+	    # don't check dir 
       # AC_MSG_RESULT([failed])
       # AC_MSG_ERROR([$withval is not a directory])
-	  use_openssl="no"
-	  AC_MSG_RESULT([$use_openssl])
+      use_openssl="no"
+      AC_MSG_RESULT([$use_openssl])
     fi
   ])
     
@@ -189,6 +189,7 @@ case "$use_openssl" in
         AC_MSG_RESULT(not found)
         ;;
     *)
+
   if test x"$use_openssl" = x
   then
     AC_MSG_RESULT(not found)
@@ -260,9 +261,13 @@ int main() {
 
   CFLAGS="$saved_cflags"
   LIBS="$saved_libs"
-
+esac
+ 
+if test "x$USE_OPENSSL" != "x"
+then
   APR_ADDTO(TCNATIVE_PRIV_INCLUDES, [$TCN_OPENSSL_INC])
   APR_ADDTO(TCNATIVE_LDFLAGS, [$TCN_OPENSSL_LIBS])
+fi
 ])
 
 dnl
