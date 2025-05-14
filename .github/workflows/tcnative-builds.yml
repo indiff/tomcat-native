@@ -382,8 +382,8 @@ jobs:
           rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT11/webapps/{manager,docs,examples,host-manager}
           rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT11/lib/*{i18n-ko,i18n-ja,i18n-de,i18n-es,i18n-fr,i18n-ru}*.jar
           # disable SSLEngine
-          sed -i 's|<Listener className="org.apache.catalina.core.AprLifecycleListener" />|<Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="off"/>|g' conf/server.xml
-          sed -i 's/SSLEngine="on"/SSLEngine="off"/Ig' conf/server.xml
+          # sed -i 's|<Listener className="org.apache.catalina.core.AprLifecycleListener" />|<Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="off"/>|g' conf/server.xml
+          # sed -i 's/SSLEngine="on"/SSLEngine="off"/Ig' conf/server.xml
 
           zip -r -q -9 "${cdir}/artifacts/tomcat-centos7-$LATEST_TOMCAT11.zip" .
           # fix chinese encoding
