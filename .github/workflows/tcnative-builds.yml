@@ -32,7 +32,7 @@ jobs:
         id: get
         run: |
           set -xe
-          curl -sLO https://github.com/indiff/tomcat-native/raw/refs/heads/main.nossl/native/os/win32/libtcnative.rc
+          curl -sLO https://github.com/indiff/tomcat-native/raw/refs/heads/main/native/os/win32/libtcnative.rc
           export version1=$(grep -oP '#define TCN_VERSION\s+"\K[\d.]+' libtcnative.rc | head -1)
           rm -f libtcnative.rc
           curl -sLO https://github.com/indiff/tomcat-native/raw/refs/heads/1.3.x.nossl/native/os/win32/libtcnative.rc
@@ -47,7 +47,7 @@ jobs:
         os: [ubuntu-latest]
         apr-config: [ "--enable-static --disable-ipv6 --with-odbc=no" ]
         openssl-config: [ "--strict-warnings no-threads no-shared no-tests enable-fips no-thread-pool no-quic" ]
-        tc_branches: [ "main.nossl", "1.3.x.nossl"]
+        tc_branches: [ "main", "1.3.x.nossl"]
         apr_branch: [ "1.8.x"]
         indiff_gcc: ['CC="/opt/gcc-indiff/bin/gcc -m64"']
         #indiff_gcc: ['']
@@ -110,7 +110,7 @@ jobs:
           make install
 
           export MY_WITH_SSL="no"
-          if [[ "${{matrix.tc_branches}}" == *"main.nossl"*  ]]; then
+          if [[ "${{matrix.tc_branches}}" == *"main"*  ]]; then
             git clone --filter=blob:none --depth 1 https://github.com/openssl/openssl.git /opt/openssl
             cd /opt/openssl
             mkdir _build
@@ -184,7 +184,7 @@ jobs:
         toolset: [ "v143" ]  # "v143", "v142"
         test-static: [ "OFF" ]  # "ON", "OFF"
         openssl-config: [ "no-threads no-shared no-tests enable-fips no-thread-pool no-quic" ]
-        tc_branches: [ "main.nossl", "1.3.x.nossl"]
+        tc_branches: [ "main", "1.3.x.nossl"]
         apr_branch: [ "1.8.x"]
         triplet: [ x64-windows ]
       fail-fast: false
@@ -343,10 +343,10 @@ jobs:
           for dir in artifacts/*/; do
             the_dir=`basename "${cdir}/${dir}"`
             if [[ -d "${cdir}/artifacts/${the_dir}" ]]; then
-              # "main.nossl", "1.3.x.nossl"
+              # "main", "1.3.x.nossl"
               echo "Directory exists ${the_dir}."
               cd "${cdir}/artifacts/${the_dir}"
-              if [[ "$the_dir" == *"main.nossl"*  ]]; then
+              if [[ "$the_dir" == *"main"*  ]]; then
                   cp -rf *.dll  ${{ github.workspace }}/apache-tomcat-${LATEST_TOMCAT11}/bin/ || true
                   cp -rf lib/*  ${{ github.workspace }}/apache-tomcat-${LATEST_TOMCAT11}/lib/ || true
               fi
@@ -369,10 +369,10 @@ jobs:
           rm -rf ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT7/lib/*{i18n-ko,i18n-ja,i18n-de,i18n-es,i18n-fr,i18n-ru}*.jar
           # disable SSLEngine
           sed -i 's/SSLEngine="on"/SSLEngine="off"/Ig' conf/server.xml
-          zip -r -q -9 "${cdir}/artifacts/tomcat-centos7-$LATEST_TOMCAT7.zip" .
+          zip -r -q -9 "${cdir}/artifacts/tomcat-centos7-tc1-$LATEST_TOMCAT7.zip" .
           # fix chinese encoding
           sed -i 's/encoding = UTF-8/encoding = GBK/Ig' conf/logging.properties
-          zip -r -q -9 "${cdir}/artifacts/tomcat-windows-$LATEST_TOMCAT7.zip" .
+          zip -r -q -9 "${cdir}/artifacts/tomcat-windows-tc1-$LATEST_TOMCAT7.zip" .
 
           cd ${{ github.workspace }}/apache-tomcat-$LATEST_TOMCAT11
           cat << 'EOF' > bin/setenv.sh
@@ -385,10 +385,10 @@ jobs:
           # sed -i 's|<Listener className="org.apache.catalina.core.AprLifecycleListener" />|<Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="off"/>|g' conf/server.xml
           # sed -i 's/SSLEngine="on"/SSLEngine="off"/Ig' conf/server.xml
 
-          zip -r -q -9 "${cdir}/artifacts/tomcat-centos7-$LATEST_TOMCAT11.zip" .
+          zip -r -q -9 "${cdir}/artifacts/tomcat-centos7-tc2-$LATEST_TOMCAT11.zip" .
           # fix chinese encoding
           sed -i 's/encoding = UTF-8/encoding = GBK/Ig' conf/logging.properties
-          zip -r -q -9 "${cdir}/artifacts/tomcat-windows-$LATEST_TOMCAT11.zip" .
+          zip -r -q -9 "${cdir}/artifacts/tomcat-windows-tc2-$LATEST_TOMCAT11.zip" .
 
           (cd ${cdir}/artifacts && sha256sum *.{zip,tar.xz,7z} > checksums.sha256)
           export build_timestamp="$(date +'%Y%m%d_%H%M')"
