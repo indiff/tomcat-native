@@ -19,7 +19,7 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 env:
-  gcc_indiff_centos7_url: "https://github.com/indiff/gcc-build/releases/download/20250514_0934_16.0.0/gcc-indiff-centos7-16.0.0-x86_64-20250514_0932.xz"
+  gcc_indiff_centos7_url: "https://github.com/indiff/gcc-build/releases/download/20251009_0934_16.0.0/gcc-indiff-centos7-16.0.0-x86_64-20251009_0931.xz"
 jobs:
   before_build:
     runs-on: [ ubuntu-latest ]
@@ -91,7 +91,7 @@ jobs:
           echo 'Asia/Shanghai' > /etc/timezone
           yum update -y
           yum install -y gcc sudo zlib-devel make git wget sed zip systemd autoconf automake libtool java-1.8.0-openjdk-devel.x86_64 pkgconfig expat-devel
-          yum install -y perl-Test-Simple perl-FindBin perl-IPC-Cmd perl-Text-Template perl-File-Compare perl-File-Copy perl-Data-Dumper perl-Digest-SHA
+          yum install -y perl-Test-Simple perl-FindBin perl-IPC-Cmd perl-Text-Template perl-File-Compare perl-File-Copy perl-Data-Dumper perl-Digest-SHA perl-Time-Piece
 
           # update git
           yum -y remove git
@@ -428,3 +428,4 @@ jobs:
           gh release create "$TAGNAME" --target "main" -F ${{ github.workspace }}/RELEASE.md --title "$NAME" ${{ github.workspace }}/artifacts/*
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
