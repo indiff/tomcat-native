@@ -62,7 +62,7 @@ jobs:
             curl -L -o apr.zip https://github.com/apache/apr/archive/refs/tags/$env:APR_VERSION.zip
             Expand-Archive apr.zip
             cd apr\apr-$env:APR_VERSION
-            (Get-Content .\include\apr.hw).Replace('0x0501', '0x0600') | Set-Content .\include\apr.hw 
+            (Get-Content .\include\apr.hw).Replace('0x0501', '0x0600') | Set-Content .\include\apr.hw
     - name: Build apr using Nmake
       shell: cmd
       run: |
@@ -81,4 +81,8 @@ jobs:
             call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=${{ matrix.arch }}
             cd native
             echo "Building for ${{ matrix.build-arch }}"
-            nmake  -f NMAKEmakefile CPU=${{ matrix.build-arch }} WITH_APR=C:\APR WITH_OPENSSL=C:\OPENSSL APR_DECLARE_STATIC=1 STATIC_CRT=Hybrid OPENSSL_NEW_LIBS=1 ENABLE_OCSP=1
+            nmake  -f NMAKEmakefile CPU=${{ matrix.build-arch }} WITH_APR=C:\APR WITH_OPENSSL=C:\OPENSSL APR_DECLARE_STATIC=1 STATIC_CRT=Hybrid
+    - uses: actions/upload-artifact@v4
+      with:
+        name: windows-artifact
+        path: native\WIN7_X64_DLL_RELEASE\tcnative-2.dll

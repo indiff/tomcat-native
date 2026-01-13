@@ -33,8 +33,8 @@ extern int WIN32_SSL_password_prompt(tcn_pass_cb_t *data);
 #define ASN1_SEQUENCE 0x30
 #define ASN1_OID      0x06
 #define ASN1_STRING   0x86
-static int ssl_verify_OCSP(X509_STORE_CTX *ctx);
-static int ssl_ocsp_request(X509 *cert, X509 *issuer, X509_STORE_CTX *ctx);
+static int ssl_verify_OCSP(X509_STORE_CTX *ctx, int timeout, int verifyFlags);
+static int ssl_ocsp_request(X509 *cert, X509 *issuer, X509_STORE_CTX *ctx, int timeout, int verifyFlags);
 #endif
 
 /*  _________________________________________________________________
@@ -181,16 +181,20 @@ int SSL_password_callback(char *buf, int bufsiz, int verify,
 **  Custom (EC)DH parameter support
 **  _________________________________________________________________
 */
-DH *SSL_dh_GetParamFromFile(const char *file)
+EVP_PKEY *SSL_dh_GetParamFromFile(const char *file)
 {
-    DH *dh = NULL;
+    EVP_PKEY *evp = NULL;
     BIO *bio;
 
     if ((bio = BIO_new_file(file, "r")) == NULL)
         return NULL;
-    dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
+    evp = PEM_read_bio_Parameters_ex(bio, NULL, NULL, NULL);
     BIO_free(bio);
-    return dh;
+    if (!EVP_PKEY_is_a(evp, "DH")) {
+        EVP_PKEY_free(evp);
+        return NULL;
+    }
+    return evp;
 }
 
 #ifdef HAVE_ECC
@@ -206,32 +210,6 @@ EC_GROUP *SSL_ec_GetParamFromFile(const char *file)
     return (group);
 }
 #endif
-
-/*
- * Hand out standard DH parameters, based on the authentication strength
- */
-DH *SSL_callback_tmp_DH(SSL *ssl, int export, int keylen)
-{
-    EVP_PKEY *pkey = SSL_get_privatekey(ssl);
-    int type = pkey != NULL ? EVP_PKEY_base_id(pkey) : EVP_PKEY_NONE;
-
-    /*
-     * OpenSSL will call us with either keylen == 512 or keylen == 1024
-     * (see the definition of SSL_EXPORT_PKEYLENGTH in ssl_locl.h).
-     * Adjust the DH parameter length according to the size of the
-     * RSA/DSA private key used for the current connection, and always
-     * use at least 1024-bit parameters.
-     * Note: This may cause interoperability issues with implementations
-     * which limit their DH support to 1024 bit - e.g. Java 7 and earlier.
-     * In this case, SSLCertificateFile can be used to specify fixed
-     * 1024-bit DH parameters (with the effect that OpenSSL skips this
-     * callback).
-     */
-    if ((type == EVP_PKEY_RSA) || (type == EVP_PKEY_DSA)) {
-        keylen = EVP_PKEY_bits(pkey);
-    }
-    return SSL_get_dh_params(keylen);
-}
 
 /*
  * Read a file that optionally contains the server certificate in PEM
@@ -299,11 +277,14 @@ int SSL_callback_SSL_verify(int ok, X509_STORE_CTX *ctx)
                                           SSL_get_ex_data_X509_STORE_CTX_idx());
     tcn_ssl_conn_t *con = (tcn_ssl_conn_t *)SSL_get_app_data(ssl);
     /* Get verify ingredients */
-    int errnum   = X509_STORE_CTX_get_error(ctx);
-    int errdepth = X509_STORE_CTX_get_error_depth(ctx);
-    int verify   = con->ctx->verify_mode;
-    int depth    = con->ctx->verify_depth;
-    int ocsp_check_type = con->ctx->no_ocsp_check;
+    int errnum            = X509_STORE_CTX_get_error(ctx);
+    int errdepth          = X509_STORE_CTX_get_error_depth(ctx);
+    int verify            = con->ctx->verify_mode;
+    int depth             = con->ctx->verify_depth;
+    int ocsp_check_type   = con->ctx->no_ocsp_check;
+    int ocsp_soft_fail    = con->ctx->ocsp_soft_fail;
+    int ocsp_timeout      = con->ctx->ocsp_timeout;
+    int ocsp_verify_flags = con->ctx->ocsp_verify_flags;
 
 #if defined(SSL_OP_NO_TLSv1_3)
     con->pha_state = PHA_COMPLETE;
@@ -349,15 +330,15 @@ int SSL_callback_SSL_verify(int ok, X509_STORE_CTX *ctx)
                 ok = 0;
             }
             else {
-                int ocsp_response = ssl_verify_OCSP(ctx);
+                int ocsp_response = ssl_verify_OCSP(ctx, ocsp_timeout, ocsp_verify_flags);
                 if (ocsp_response == OCSP_STATUS_REVOKED) {
                     ok = 0 ;
                     errnum = X509_STORE_CTX_get_error(ctx);
                 }
                 else if (ocsp_response == OCSP_STATUS_UNKNOWN) {
                     errnum = X509_STORE_CTX_get_error(ctx);
-                    if (errnum)
-                        ok = 0 ;
+                    if (errnum != 0 && !(ocsp_soft_fail && errnum == X509_V_ERR_UNABLE_TO_GET_CRL))
+                        ok = 0;
                 }
             }
         }
@@ -492,7 +473,7 @@ int SSL_callback_alpn_select_proto(SSL* ssl, const unsigned char **out, unsigned
 #ifdef HAVE_OCSP
 
 /* Function that is used to do the OCSP verification */
-static int ssl_verify_OCSP(X509_STORE_CTX *ctx)
+static int ssl_verify_OCSP(X509_STORE_CTX *ctx, int timeout, int verifyFlags)
 {
     X509 *cert, *issuer;
     int r = OCSP_STATUS_UNKNOWN;
@@ -517,7 +498,7 @@ static int ssl_verify_OCSP(X509_STORE_CTX *ctx)
     /* if we can't get the issuer, we cannot perform OCSP verification */
     issuer = X509_STORE_CTX_get0_current_issuer(ctx);
     if (issuer != NULL) {
-        r = ssl_ocsp_request(cert, issuer, ctx);
+        r = ssl_ocsp_request(cert, issuer, ctx, timeout, verifyFlags);
         switch (r) {
         case OCSP_STATUS_OK:
             X509_STORE_CTX_set_error(ctx, X509_V_OK);
@@ -935,11 +916,31 @@ static OCSP_RESPONSE *ocsp_get_resp(apr_pool_t *mp, apr_socket_t *sock)
     return resp;
 }
 
-/* Creates and OCSP request and returns the OCSP_RESPONSE */
-static OCSP_RESPONSE *get_ocsp_response(apr_pool_t *p, X509 *cert, X509 *issuer, char *url)
+/* Creates an OCSP request */
+static OCSP_REQUEST *get_ocsp_request(X509 *cert, X509 *issuer)
+{
+    OCSP_REQUEST *ocsp_req = NULL;
+
+    ocsp_req = OCSP_REQUEST_new();
+    if (ocsp_req == NULL)
+        return NULL;
+
+    // Populate the request
+    if (add_ocsp_cert(ocsp_req, cert, issuer) == 0) {
+        OCSP_REQUEST_free(ocsp_req);
+        return NULL;
+    }
+
+    // Add a nonce to protect against replay attacks
+    OCSP_request_add1_nonce(ocsp_req, NULL, -1);
+
+    return ocsp_req;
+}
+
+/* Submits an OCSP request and returns the OCSP_RESPONSE */
+static OCSP_RESPONSE *get_ocsp_response(apr_pool_t *p, char *url, OCSP_REQUEST *ocsp_req, int timeout)
 {
     OCSP_RESPONSE *ocsp_resp = NULL;
-    OCSP_REQUEST *ocsp_req = NULL;
     BIO *bio_req;
     char *hostname, *path, *c_port;
     int port, use_ssl;
@@ -956,18 +957,10 @@ static OCSP_RESPONSE *get_ocsp_response(apr_pool_t *p, X509 *cert, X509 *issuer,
     if (sscanf(c_port, "%d", &port) != 1)
         goto end;
 
-    /* Create the OCSP request */
-    ocsp_req = OCSP_REQUEST_new();
-    if (ocsp_req == NULL)
-        goto end;
-
-    if (add_ocsp_cert(ocsp_req,cert,issuer) == 0 )
-        goto free_req;
-
     /* create the BIO with the request to send */
     bio_req = serialize_request(ocsp_req, hostname, port, path);
     if (bio_req == NULL) {
-        goto free_req;
+        goto end;
     }
 
     apr_pool_create(&mp, p);
@@ -975,6 +968,8 @@ static OCSP_RESPONSE *get_ocsp_response(apr_pool_t *p, X509 *cert, X509 *issuer,
     if (apr_sock == NULL) {
         goto free_bio;
     }
+
+    apr_socket_timeout_set(apr_sock, timeout);
 
     ok = ocsp_send_req(apr_sock, bio_req);
     if (ok) {
@@ -986,9 +981,6 @@ free_bio:
     BIO_free(bio_req);
     apr_pool_destroy(mp);
 
-free_req:
-    OCSP_REQUEST_free(ocsp_req);
-
 end:
     OPENSSL_free(hostname);
     OPENSSL_free(c_port);
@@ -998,30 +990,60 @@ end:
 }
 
 /* Process the OCSP_RESPONSE and returns the corresponding
-   answert according to the status.
+   answer according to the status.
 */
-static int process_ocsp_response(OCSP_RESPONSE *ocsp_resp, X509 *cert, X509 *issuer)
+static int process_ocsp_response(OCSP_REQUEST *ocsp_req, OCSP_RESPONSE *ocsp_resp, X509 *cert, X509 *issuer,
+        X509_STORE_CTX *ctx, int verifyFlags)
 {
     int r, o = V_OCSP_CERTSTATUS_UNKNOWN, i;
     OCSP_BASICRESP *bs;
     OCSP_SINGLERESP *ss;
     OCSP_CERTID *certid;
+    ASN1_GENERALIZEDTIME *thisupd;
+    ASN1_GENERALIZEDTIME *nextupd;
+    const STACK_OF(X509) *certStack;
 
     r = OCSP_response_status(ocsp_resp);
 
     if (r != OCSP_RESPONSE_STATUS_SUCCESSFUL) {
         return OCSP_STATUS_UNKNOWN;
     }
+
     bs = OCSP_response_get1_basic(ocsp_resp);
+    if (OCSP_check_nonce(ocsp_req, bs) == 0) {
+        X509_STORE_CTX_set_error(ctx, X509_V_ERR_OCSP_RESP_INVALID);
+        o = OCSP_STATUS_UNKNOWN;
+        goto clean_bs;
+    }
+
+    certStack = OCSP_resp_get0_certs(bs);
+    // Cast to non-const pointer is OK here since OCSP_basic_verify does not modify the provided certs
+    if (OCSP_basic_verify(bs, (STACK_OF(X509) *)certStack, X509_STORE_CTX_get0_store(ctx), verifyFlags) <= 0) {
+        X509_STORE_CTX_set_error(ctx, X509_V_ERR_OCSP_SIGNATURE_FAILURE);
+        o = OCSP_STATUS_UNKNOWN;
+        goto clean_bs;
+    }
 
     certid = OCSP_cert_to_id(NULL, cert, issuer);
     if (certid == NULL) {
-        return OCSP_STATUS_UNKNOWN;
+        X509_STORE_CTX_set_error(ctx, X509_V_ERR_OCSP_RESP_INVALID);
+        o = OCSP_STATUS_UNKNOWN;
+        goto clean_bs;
     }
+
     ss = OCSP_resp_get0(bs, OCSP_resp_find(bs, certid, -1)); /* find by serial number and get the matching response */
+    i = OCSP_single_get0_status(ss, NULL, NULL, &thisupd, &nextupd);
+    if (OCSP_check_validity(thisupd, nextupd, OCSP_MAX_SKEW, -1) <= 0) {
+        X509_STORE_CTX_set_error(ctx, X509_V_ERR_OCSP_NOT_YET_VALID);
+        o = OCSP_STATUS_UNKNOWN;
+        goto clean_certid;
+    }
+    if (OCSP_check_validity(thisupd, nextupd, OCSP_MAX_SKEW, OCSP_MAX_SKEW) <= 0) {
+        X509_STORE_CTX_set_error(ctx, X509_V_ERR_OCSP_HAS_EXPIRED);
+        o = OCSP_STATUS_UNKNOWN;
+        goto clean_certid;
+    }
 
-
-    i = OCSP_single_get0_status(ss, NULL, NULL, NULL, NULL);
     if (i == V_OCSP_CERTSTATUS_GOOD)
         o =  OCSP_STATUS_OK;
     else if (i == V_OCSP_CERTSTATUS_REVOKED)
@@ -1029,16 +1051,18 @@ static int process_ocsp_response(OCSP_RESPONSE *ocsp_resp, X509 *cert, X509 *iss
     else if (i == V_OCSP_CERTSTATUS_UNKNOWN)
         o = OCSP_STATUS_UNKNOWN;
 
-    /* we clean up */
+clean_certid:
     OCSP_CERTID_free(certid);
+clean_bs:
     OCSP_BASICRESP_free(bs);
     return o;
 }
 
-static int ssl_ocsp_request(X509 *cert, X509 *issuer, X509_STORE_CTX *ctx)
+static int ssl_ocsp_request(X509 *cert, X509 *issuer, X509_STORE_CTX *ctx, int timeout, int verifyFlags)
 {
     char **ocsp_urls = NULL;
     int nid;
+    int rv = OCSP_STATUS_UNKNOWN;
     X509_EXTENSION *ext;
     ASN1_OCTET_STRING *os;
     apr_pool_t *p;
@@ -1057,26 +1081,34 @@ static int ssl_ocsp_request(X509 *cert, X509 *issuer, X509_STORE_CTX *ctx)
     /* if we find the extensions and we can parse it check
        the ocsp status. Otherwise, return OCSP_STATUS_UNKNOWN */
     if (ocsp_urls != NULL) {
-        OCSP_RESPONSE *resp;
-        int rv = OCSP_STATUS_UNKNOWN;
+        OCSP_REQUEST *req;
+        OCSP_RESPONSE *resp = NULL;
         /* for the time being just check for the fist response .. a better
            approach is to iterate for all the possible ocsp urls */
-        resp = get_ocsp_response(p, cert, issuer, ocsp_urls[0]);
-        if (resp != NULL) {
-            rv = process_ocsp_response(resp, cert, issuer);
+        req = get_ocsp_request(cert, issuer);
+        if (req != NULL) {
+            resp = get_ocsp_response(p, ocsp_urls[0], req, timeout);
+            if (resp != NULL) {
+                rv = process_ocsp_response(req, resp, cert, issuer, ctx, verifyFlags);
+            } else {
+                /* Unable to send request / receive response. */
+                X509_STORE_CTX_set_error(ctx, X509_V_ERR_UNABLE_TO_GET_CRL);
+            }
         } else {
             /* correct error code for application errors? */
             X509_STORE_CTX_set_error(ctx, X509_V_ERR_APPLICATION_VERIFICATION);
         }
 
+        if (req != NULL) {
+            OCSP_REQUEST_free(req);
+        }
+
         if (resp != NULL) {
             OCSP_RESPONSE_free(resp);
-            apr_pool_destroy(p);
-            return rv;
         }
     }
     apr_pool_destroy(p);
-    return OCSP_STATUS_UNKNOWN;
+    return rv;
 }
 
 #endif /* HAVE_OCSP */

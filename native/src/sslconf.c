@@ -113,6 +113,12 @@ TCN_IMPLEMENT_CALL(jlong, SSLConf, make)(TCN_STDARGS, jlong pool,
     c->cctx = cctx;
     c->pool = p;
 
+    /* OCSP defaults */
+    c->no_ocsp_check     = OCSP_NO_CHECK_DEFAULT;
+    c->ocsp_soft_fail    = OCSP_SOFT_FAIL_DEFAULT;
+    c->ocsp_timeout      = OCSP_TIMEOUT_DEFAULT;
+    c->ocsp_verify_flags = OCSP_VERIFY_FLAGS_DEFAULT;
+
     /*
      * Let us cleanup the SSL_CONF context when the pool is destroyed
      */
@@ -158,6 +164,41 @@ TCN_IMPLEMENT_CALL(jint, SSLConf, check)(TCN_STDARGS, jlong cctx,
             c->no_ocsp_check = 0;
         else
             c->no_ocsp_check = 1;
+        TCN_FREE_CSTRING(cmd);
+        TCN_FREE_CSTRING(value);
+        return 1;
+    }
+
+    if (!strcmp(J2S(cmd), "OCSP_SOFT_FAIL")) {
+        if (!strcasecmp(J2S(value), "false"))
+            c->ocsp_soft_fail = 0;
+        else
+            c->ocsp_soft_fail = 1;
+        TCN_FREE_CSTRING(cmd);
+        TCN_FREE_CSTRING(value);
+        return 1;
+    }
+
+    if (!strcmp(J2S(cmd), "OCSP_TIMEOUT")) {
+        int i;
+        errno = 0;
+        i = (int) strtol(J2S(value), NULL, 10);
+        if (!errno) {
+            // Tomcat configures timeout is millisecond. APR uses microseconds.
+            c->ocsp_timeout = i * 1000;
+        }
+        TCN_FREE_CSTRING(cmd);
+        TCN_FREE_CSTRING(value);
+        return 1;
+    }
+
+    if (!strcmp(J2S(cmd), "OCSP_VERIFY_FLAGS")) {
+        int i;
+        errno = 0;
+        i = (int) strtol(J2S(value), NULL, 10);
+        if (!errno) {
+            c->ocsp_verify_flags = i;
+        }
         TCN_FREE_CSTRING(cmd);
         TCN_FREE_CSTRING(value);
         return 1;
@@ -217,6 +258,9 @@ TCN_IMPLEMENT_CALL(void, SSLConf, assign)(TCN_STDARGS, jlong cctx,
     // sc->ctx == 0 is allowed!
     SSL_CONF_CTX_set_ssl_ctx(c->cctx, sc->ctx);
     sc->no_ocsp_check = c->no_ocsp_check;
+    sc->ocsp_soft_fail = c->ocsp_soft_fail;
+    sc->ocsp_timeout = c->ocsp_timeout;
+    sc->ocsp_verify_flags = c->ocsp_verify_flags;
 }
 
 /* Apply a command to an SSL_CONF context */
@@ -265,6 +309,38 @@ TCN_IMPLEMENT_CALL(jint, SSLConf, apply)(TCN_STDARGS, jlong cctx,
         TCN_FREE_CSTRING(value);
         return 1;
     }
+    if (!strcmp(J2S(cmd), "OCSP_SOFT_FAIL")) {
+        if (!strcasecmp(J2S(value), "false"))
+            c->ocsp_soft_fail = 0;
+        else
+            c->ocsp_soft_fail = 1;
+        TCN_FREE_CSTRING(cmd);
+        TCN_FREE_CSTRING(value);
+        return 1;
+    }
+    if (!strcmp(J2S(cmd), "OCSP_TIMEOUT")) {
+        int i;
+        errno = 0;
+        i = (int) strtol(J2S(value), NULL, 10);
+        if (!errno) {
+            // Tomcat configures timeout is millisecond. APR uses microseconds.
+            c->ocsp_timeout = i * 1000;
+        }
+        TCN_FREE_CSTRING(cmd);
+        TCN_FREE_CSTRING(value);
+        return 1;
+    }
+    if (!strcmp(J2S(cmd), "OCSP_VERIFY_FLAGS")) {
+        int i;
+        errno = 0;
+        i = (int) strtol(J2S(value), NULL, 10);
+        if (!errno) {
+            c->ocsp_verify_flags = i;
+        }
+        TCN_FREE_CSTRING(cmd);
+        TCN_FREE_CSTRING(value);
+        return 1;
+    }
     SSL_ERR_clear();
     rc = SSL_CONF_cmd(c->cctx, J2S(cmd), buf != NULL ? buf : J2S(value));
     ec = SSL_ERR_get();
@@ -298,6 +374,7 @@ TCN_IMPLEMENT_CALL(jint, SSLConf, finish)(TCN_STDARGS, jlong cctx)
     UNREFERENCED_STDARGS;
     TCN_ASSERT(c != 0);
     TCN_ASSERT(c->cctx != 0);
+    SSL_ERR_clear();
     rc = SSL_CONF_CTX_finish(c->cctx);
     ec = SSL_ERR_get();
     if (rc <= 0 || ec != 0) {

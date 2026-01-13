@@ -513,36 +513,45 @@ TCN_IMPLEMENT_CALL(void, SSLContext, setQuietShutdown)(TCN_STDARGS, jlong ctx,
 }
 
 TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCipherSuite)(TCN_STDARGS, jlong ctx,
-                                                         jstring ciphers)
+                                                         jstring cipherList)
 {
     tcn_ssl_ctxt_t *c = J2P(ctx, tcn_ssl_ctxt_t *);
-    TCN_ALLOC_CSTRING(ciphers);
+    TCN_ALLOC_CSTRING(cipherList);
     jboolean rv = JNI_TRUE;
 #ifndef HAVE_EXPORT_CIPHERS
     size_t len;
     char *buf;
 #endif
-
     UNREFERENCED(o);
-    TCN_ASSERT(ctx != 0);
-    if (!J2S(ciphers))
+
+    if (c == NULL) {
+        TCN_FREE_CSTRING(cipherList);
+        tcn_ThrowException(e, "ssl context is null");
         return JNI_FALSE;
+    }
+
+    if (!J2S(cipherList)) {
+        rv = JNI_FALSE;
+        goto free_cipherList;
+    }
 
 #ifndef HAVE_EXPORT_CIPHERS
     /*
      *  Always disable NULL and export ciphers,
      *  no matter what was given in the config.
      */
-    len = strlen(J2S(ciphers)) + strlen(SSL_CIPHERS_ALWAYS_DISABLED) + 1;
+    len = strlen(J2S(cipherList)) + strlen(SSL_CIPHERS_ALWAYS_DISABLED) + 1;
     buf = malloc(len * sizeof(char *));
-    if (buf == NULL)
-        return JNI_FALSE;
+    if (buf == NULL) {
+        rv = JNI_FALSE;
+        goto free_cipherList;
+    }
     memcpy(buf, SSL_CIPHERS_ALWAYS_DISABLED, strlen(SSL_CIPHERS_ALWAYS_DISABLED));
-    memcpy(buf + strlen(SSL_CIPHERS_ALWAYS_DISABLED), J2S(ciphers), strlen(J2S(ciphers)));
+    memcpy(buf + strlen(SSL_CIPHERS_ALWAYS_DISABLED), J2S(cipherList), strlen(J2S(cipherList)));
     buf[len - 1] = '\0';
     if (!SSL_CTX_set_cipher_list(c->ctx, buf)) {
 #else
-    if (!SSL_CTX_set_cipher_list(c->ctx, J2S(ciphers))) {
+    if (!SSL_CTX_set_cipher_list(c->ctx, J2S(cipherList))) {
 #endif
         char err[TCN_OPENSSL_ERROR_STRING_LENGTH];
         ERR_error_string_n(SSL_ERR_get(), err, TCN_OPENSSL_ERROR_STRING_LENGTH);
@@ -552,7 +561,39 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCipherSuite)(TCN_STDARGS, jlong ctx,
 #ifndef HAVE_EXPORT_CIPHERS
     free(buf);
 #endif
-    TCN_FREE_CSTRING(ciphers);
+free_cipherList:
+    TCN_FREE_CSTRING(cipherList);
+    return rv;
+}
+
+TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCipherSuitesEx)(TCN_STDARGS, jlong ctx,
+                                                         jstring cipherSuites)
+{
+    tcn_ssl_ctxt_t *c = J2P(ctx, tcn_ssl_ctxt_t *);
+    TCN_ALLOC_CSTRING(cipherSuites);
+    jboolean rv = JNI_TRUE;
+    UNREFERENCED(o);
+
+    if (c == NULL) {
+        TCN_FREE_CSTRING(cipherSuites);
+        tcn_ThrowException(e, "ssl context is null");
+        return JNI_FALSE;
+    }
+
+    if (!J2S(cipherSuites)) {
+        rv = JNI_FALSE;
+        goto free_cipherSuites;
+    }
+
+    if (!SSL_CTX_set_ciphersuites(c->ctx, J2S(cipherSuites))) {
+        char err[TCN_OPENSSL_ERROR_STRING_LENGTH];
+        ERR_error_string_n(SSL_ERR_get(), err, TCN_OPENSSL_ERROR_STRING_LENGTH);
+        tcn_Throw(e, "Unable to configure permitted SSL cipher suites (%s)", err);
+        rv = JNI_FALSE;
+    }
+
+free_cipherSuites:
+    TCN_FREE_CSTRING(cipherSuites);
     return rv;
 }
 
@@ -737,98 +778,6 @@ cleanup:
     return rv;
 }
 
-TCN_IMPLEMENT_CALL(void, SSLContext, setTmpDH)(TCN_STDARGS, jlong ctx,
-                                                                  jstring file)
-{
-    tcn_ssl_ctxt_t *c = J2P(ctx, tcn_ssl_ctxt_t *);
-    BIO *bio = NULL;
-    DH *dh = NULL;
-    TCN_ALLOC_CSTRING(file);
-    UNREFERENCED(o);
-    TCN_ASSERT(ctx != 0);
-    TCN_ASSERT(file);
-
-    if (!J2S(file)) {
-        tcn_Throw(e, "Error while configuring DH: no dh param file given");
-        return;
-    }
-
-    bio = BIO_new_file(J2S(file), "r");
-    if (!bio) {
-        char err[TCN_OPENSSL_ERROR_STRING_LENGTH];
-        ERR_error_string_n(SSL_ERR_get(), err, TCN_OPENSSL_ERROR_STRING_LENGTH);
-        tcn_Throw(e, "Error while configuring DH using %s: %s", J2S(file), err);
-        TCN_FREE_CSTRING(file);
-        return;
-    }
-
-    dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
-    BIO_free(bio);
-    if (!dh) {
-        char err[TCN_OPENSSL_ERROR_STRING_LENGTH];
-        ERR_error_string_n(SSL_ERR_get(), err, TCN_OPENSSL_ERROR_STRING_LENGTH);
-        tcn_Throw(e, "Error while configuring DH: no DH parameter found in %s (%s)", J2S(file), err);
-        TCN_FREE_CSTRING(file);
-        return;
-    }
-
-    if (1 != SSL_CTX_set_tmp_dh(c->ctx, dh)) {
-        char err[TCN_OPENSSL_ERROR_STRING_LENGTH];
-        DH_free(dh);
-        ERR_error_string_n(SSL_ERR_get(), err, TCN_OPENSSL_ERROR_STRING_LENGTH);
-        tcn_Throw(e, "Error while configuring DH with file %s: %s", J2S(file), err);
-        TCN_FREE_CSTRING(file);
-        return;
-    }
-
-    DH_free(dh);
-    TCN_FREE_CSTRING(file);
-}
-
-TCN_IMPLEMENT_CALL(void, SSLContext, setTmpECDHByCurveName)(TCN_STDARGS, jlong ctx,
-                                                                  jstring curveName)
-{
-#ifdef HAVE_ECC
-    tcn_ssl_ctxt_t *c = J2P(ctx, tcn_ssl_ctxt_t *);
-    int i;
-    EC_KEY  *ecdh;
-    TCN_ALLOC_CSTRING(curveName);
-    UNREFERENCED(o);
-    TCN_ASSERT(ctx != 0);
-    TCN_ASSERT(curveName);
-
-    /* First try to get curve by name */
-    i = OBJ_sn2nid(J2S(curveName));
-    if (!i) {
-        tcn_Throw(e, "Can't configure elliptic curve: unknown curve name %s", J2S(curveName));
-        TCN_FREE_CSTRING(curveName);
-        return;
-    }
-
-    ecdh = EC_KEY_new_by_curve_name(i);
-    if (!ecdh) {
-        tcn_Throw(e, "Can't configure elliptic curve: unknown curve name %s", J2S(curveName));
-        TCN_FREE_CSTRING(curveName);
-        return;
-    }
-
-    /* Setting found curve to context */
-    if (1 != SSL_CTX_set_tmp_ecdh(c->ctx, ecdh)) {
-        char err[TCN_OPENSSL_ERROR_STRING_LENGTH];
-        EC_KEY_free(ecdh);
-        ERR_error_string_n(SSL_ERR_get(), err, TCN_OPENSSL_ERROR_STRING_LENGTH);
-        tcn_Throw(e, "Error while configuring elliptic curve %s: %s", J2S(curveName), err);
-        TCN_FREE_CSTRING(curveName);
-        return;
-    }
-    EC_KEY_free(ecdh);
-    TCN_FREE_CSTRING(curveName);
-#else
-    tcn_Throw(e, "Cant't configure elliptic curve: unsupported by this OpenSSL version");
-    return;
-#endif
-}
-
 TCN_IMPLEMENT_CALL(void, SSLContext, setShutdownType)(TCN_STDARGS, jlong ctx,
                                                       jint type)
 {
@@ -1001,7 +950,7 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCertificate)(TCN_STDARGS, jlong ctx,
     int nid;
     EC_KEY *eckey = NULL;
 #endif
-    DH *dhparams;
+    EVP_PKEY *evp;
 
     UNREFERENCED(o);
     TCN_ASSERT(ctx != 0);
@@ -1036,13 +985,7 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCertificate)(TCN_STDARGS, jlong ctx,
         }
     }
     else {
-        if ((c->keys[idx] = load_pem_key(c, key_file)) == NULL
-#ifndef OPENSSL_NO_ENGINE
-                && (tcn_ssl_engine == NULL ||
-                (c->keys[idx] = ENGINE_load_private_key(tcn_ssl_engine, key_file,
-                                                        NULL, NULL)) == NULL)
-#endif
-                ) {
+        if ((c->keys[idx] = load_pem_key(c, key_file)) == NULL) {
             ERR_error_string_n(SSL_ERR_get(), err, TCN_OPENSSL_ERROR_STRING_LENGTH);
             tcn_Throw(e, "Unable to load certificate key %s (%s)",
                       key_file, err);
@@ -1082,9 +1025,9 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCertificate)(TCN_STDARGS, jlong ctx,
      */
     /* XXX Does this also work for pkcs12 or only for PEM files?
      * If only for PEM files move above to the PEM handling */
-    if ((idx == 0) && (dhparams = SSL_dh_GetParamFromFile(cert_file))) {
-        SSL_CTX_set_tmp_dh(c->ctx, dhparams);
-        DH_free(dhparams);
+    if ((idx == 0) && (evp = SSL_dh_GetParamFromFile(cert_file))) {
+        SSL_CTX_set0_tmp_dh_pkey(c->ctx, evp);
+        EVP_PKEY_free(evp);
     }
 
 #ifdef HAVE_ECC
@@ -1102,7 +1045,7 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCertificate)(TCN_STDARGS, jlong ctx,
     EC_KEY_free(eckey);
     EC_GROUP_free(ecparams);
 #endif
-    SSL_CTX_set_tmp_dh_callback(c->ctx, SSL_callback_tmp_DH);
+    SSL_CTX_set_dh_auto(c->ctx, 1);
 
 cleanup:
     TCN_FREE_CSTRING(cert);
@@ -1211,7 +1154,7 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCertificateRaw)(TCN_STDARGS, jlong c
      * TODO try to read the ECDH curve name from somewhere...
      */
 #endif
-    SSL_CTX_set_tmp_dh_callback(c->ctx, SSL_callback_tmp_DH);
+    SSL_CTX_set_dh_auto(c->ctx, 1);
 cleanup:
     free(key);
     free(cert);
@@ -1860,7 +1803,7 @@ TCN_IMPLEMENT_CALL(void, SSLContext, setCertVerifyCallback)(TCN_STDARGS, jlong c
         }
         // Delete the reference to the previous specified verifier if needed.
         if (c->verifier != NULL) {
-            (*e)->DeleteLocalRef(e, c->verifier);
+            (*e)->DeleteGlobalRef(e, c->verifier);
         }
         c->verifier = (*e)->NewGlobalRef(e, verifier);
         c->verifier_method = method;

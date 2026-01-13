@@ -26,7 +26,6 @@ static int ssl_initialized = 0;
 static char *ssl_global_rand_file = NULL;
 extern apr_pool_t *tcn_global_pool;
 
-ENGINE *tcn_ssl_engine = NULL;
 tcn_pass_cb_t tcn_password_callback;
 
 static BIO *key_log_file = NULL;
@@ -43,90 +42,11 @@ static void ssl_keylog_callback(const SSL *ssl, const char *line)
 static jclass byteArrayClass;
 static jclass stringClass;
 
-/*
- * Grab well-defined DH parameters from OpenSSL, see the BN_get_rfc*
- * functions in <openssl/bn.h> for all available primes.
- */
-static DH *make_dh_params(BIGNUM *(*prime)(BIGNUM *))
-{
-    DH *dh = DH_new();
-    BIGNUM *p, *g;
-
-    if (!dh) {
-        return NULL;
-    }
-    p = prime(NULL);
-    g = BN_new();
-    if (g != NULL) {
-        BN_set_word(g, 2);
-    }
-    if (!p || !g || !DH_set0_pqg(dh, p, NULL, g)) {
-        DH_free(dh);
-        BN_free(p);
-        BN_free(g);
-        return NULL;
-    }
-    return dh;
-}
-
-/* Storage and initialization for DH parameters. */
-static struct dhparam {
-    BIGNUM *(*const prime)(BIGNUM *); /* function to generate... */
-    DH *dh;                           /* ...this, used for keys.... */
-    const unsigned int min;           /* ...of length >= this. */
-} dhparams[] = {
-    { BN_get_rfc3526_prime_8192, NULL, 6145 },
-    { BN_get_rfc3526_prime_6144, NULL, 4097 },
-    { BN_get_rfc3526_prime_4096, NULL, 3073 },
-    { BN_get_rfc3526_prime_3072, NULL, 2049 },
-    { BN_get_rfc3526_prime_2048, NULL, 1025 },
-    { BN_get_rfc2409_prime_1024, NULL, 0 }
-};
-
-static void init_dh_params(void)
-{
-    unsigned n;
-
-    for (n = 0; n < sizeof(dhparams)/sizeof(dhparams[0]); n++)
-        dhparams[n].dh = make_dh_params(dhparams[n].prime);
-}
-
-static void free_dh_params(void)
-{
-    unsigned n;
-
-    /* DH_free() is a noop for a NULL parameter, so these are harmless
-     * in the (unexpected) case where these variables are already
-     * NULL. */
-    for (n = 0; n < sizeof(dhparams)/sizeof(dhparams[0]); n++) {
-        DH_free(dhparams[n].dh);
-        dhparams[n].dh = NULL;
-    }
-}
-
 void SSL_callback_add_keylog(SSL_CTX *ctx)
 {
     if (key_log_file) {
         SSL_CTX_set_keylog_callback(ctx, ssl_keylog_callback);
     }
-}
-
-/* Hand out the same DH structure though once generated as we leak
- * memory otherwise and freeing the structure up after use would be
- * hard to track and in fact is not needed at all as it is safe to
- * use the same parameters over and over again security wise (in
- * contrast to the keys itself) and code safe as the returned structure
- * is duplicated by OpenSSL anyway. Hence no modification happens
- * to our copy. */
-DH *SSL_get_dh_params(unsigned keylen)
-{
-    unsigned n;
-
-    for (n = 0; n < sizeof(dhparams)/sizeof(dhparams[0]); n++)
-        if (keylen >= dhparams[n].min)
-            return dhparams[n].dh;
-
-    return NULL; /* impossible to reach. */
 }
 
 static void init_bio_methods(void);
@@ -156,15 +76,6 @@ static apr_status_t ssl_init_cleanup(void *data)
     ssl_initialized = 0;
 
     free_bio_methods();
-    free_dh_params();
-
-#ifndef OPENSSL_NO_ENGINE
-    if (tcn_ssl_engine != NULL) {
-        /* Release the SSL Engine structural reference */
-        ENGINE_free(tcn_ssl_engine);
-        tcn_ssl_engine = NULL;
-    }
-#endif
 
     /* Openssl v1.1+ handles all termination automatically. */
 
@@ -184,22 +95,6 @@ static apr_status_t ssl_init_cleanup(void *data)
      */
     return APR_SUCCESS;
 }
-
-#ifndef OPENSSL_NO_ENGINE
-/* Try to load an engine in a shareable library */
-static ENGINE *ssl_try_load_engine(const char *engine)
-{
-    ENGINE *e = ENGINE_by_id("dynamic");
-    if (e) {
-        if (!ENGINE_ctrl_cmd_string(e, "SO_PATH", engine, 0)
-            || !ENGINE_ctrl_cmd_string(e, "LOAD", NULL, 0)) {
-            ENGINE_free(e);
-            e = NULL;
-        }
-    }
-    return e;
-}
-#endif
 
 /*
  * To ensure thread-safetyness in LibreSSL
@@ -285,9 +180,6 @@ TCN_IMPLEMENT_CALL(jint, SSL, initialize)(TCN_STDARGS, jstring engine)
 {
     jclass clazz;
     jclass sClazz;
-#if !defined(OPENSSL_NO_ENGINE)
-    apr_status_t err = APR_SUCCESS;
-#endif
 
     TCN_ALLOC_CSTRING(engine);
 
@@ -302,41 +194,6 @@ TCN_IMPLEMENT_CALL(jint, SSL, initialize)(TCN_STDARGS, jstring engine)
         TCN_FREE_CSTRING(engine);
         return (jint)APR_SUCCESS;
     }
-    /* Openssl v1.1+ handles all initialisation automatically, apart
-     * from hints as to how we want to use the library.
-     *
-     * We tell openssl we want to include engine support.
-     */
-    OPENSSL_init_ssl(OPENSSL_INIT_ENGINE_ALL_BUILTIN, NULL);
-
-#ifndef OPENSSL_NO_ENGINE
-    if (J2S(engine)) {
-        ENGINE *ee = NULL;
-        if(strcmp(J2S(engine), "auto") == 0) {
-            ENGINE_register_all_complete();
-        }
-        else {
-            if ((ee = ENGINE_by_id(J2S(engine))) == NULL
-                && (ee = ssl_try_load_engine(J2S(engine))) == NULL)
-                err = APR_ENOTIMPL;
-            else {
-#ifdef ENGINE_CTRL_CHIL_SET_FORKCHECK
-                if (strcmp(J2S(engine), "chil") == 0)
-                    ENGINE_ctrl(ee, ENGINE_CTRL_CHIL_SET_FORKCHECK, 1, 0, 0);
-#endif
-                if (!ENGINE_set_default(ee, ENGINE_METHOD_ALL))
-                    err = APR_ENOTIMPL;
-            }
-        }
-        if (err != APR_SUCCESS) {
-            TCN_FREE_CSTRING(engine);
-            ssl_init_cleanup(NULL);
-            tcn_ThrowAPRException(e, err);
-            return (jint)err;
-        }
-        tcn_ssl_engine = ee;
-    }
-#endif
 
     memset(&tcn_password_callback, 0, sizeof(tcn_pass_cb_t));
     /* Initialize PRNG
@@ -347,7 +204,6 @@ TCN_IMPLEMENT_CALL(jint, SSL, initialize)(TCN_STDARGS, jstring engine)
     /* For SSL_get_app_data2(), SSL_get_app_data3() and SSL_get_app_data4() at request time */
     SSL_init_app_data_idx();
 
-    init_dh_params();
     init_bio_methods();
 
     /*
@@ -1244,6 +1100,12 @@ TCN_IMPLEMENT_CALL(jobjectArray, SSL, getCiphers)(TCN_STDARGS, jlong ssl)
         return NULL;
     }
 
+    /* Ensure stringClass is initialized (lazy initialization) */
+    if (stringClass == NULL) {
+        jclass sClazz = (*e)->FindClass(e, "java/lang/String");
+        stringClass = (jclass) (*e)->NewGlobalRef(e, sClazz);
+    }
+
     /* Create the byte[][] array that holds all the certs */
     array = (*e)->NewObjectArray(e, len, stringClass, NULL);
 
@@ -1258,32 +1120,87 @@ TCN_IMPLEMENT_CALL(jobjectArray, SSL, getCiphers)(TCN_STDARGS, jlong ssl)
 }
 
 TCN_IMPLEMENT_CALL(jboolean, SSL, setCipherSuites)(TCN_STDARGS, jlong ssl,
-                                                         jstring ciphers)
+                                                         jstring cipherList)
 {
-    jboolean rv = JNI_TRUE;
     SSL *ssl_ = J2P(ssl, SSL *);
-    TCN_ALLOC_CSTRING(ciphers);
-
-    UNREFERENCED_STDARGS;
+    TCN_ALLOC_CSTRING(cipherList);
+    jboolean rv = JNI_TRUE;
+    #ifndef HAVE_EXPORT_CIPHERS
+        size_t len;
+        char *buf;
+    #endif
+    UNREFERENCED(o);
 
     if (ssl_ == NULL) {
-        TCN_FREE_CSTRING(ciphers);
+        TCN_FREE_CSTRING(cipherList);
         tcn_ThrowException(e, "ssl is null");
         return JNI_FALSE;
     }
 
-    UNREFERENCED(o);
-    if (!J2S(ciphers)) {
-        TCN_FREE_CSTRING(ciphers);
-        return JNI_FALSE;
+    if (!J2S(cipherList)) {
+        rv = JNI_FALSE;
+        goto free_cipherList;
     }
-    if (!SSL_set_cipher_list(ssl_, J2S(ciphers))) {
+
+#ifndef HAVE_EXPORT_CIPHERS
+    /*
+     *  Always disable NULL and export ciphers,
+     *  no matter what was given in the config.
+     */
+    len = strlen(J2S(cipherList)) + strlen(SSL_CIPHERS_ALWAYS_DISABLED) + 1;
+    buf = malloc(len * sizeof(char *));
+    if (buf == NULL) {
+        rv = JNI_FALSE;
+        goto free_cipherList;
+    }
+    memcpy(buf, SSL_CIPHERS_ALWAYS_DISABLED, strlen(SSL_CIPHERS_ALWAYS_DISABLED));
+    memcpy(buf + strlen(SSL_CIPHERS_ALWAYS_DISABLED), J2S(cipherList), strlen(J2S(cipherList)));
+    buf[len - 1] = '\0';
+    if (!SSL_set_cipher_list(ssl_, buf)) {
+#else
+    if (!SSL_set_cipher_list(ssl_, J2S(cipherList))) {
+#endif
         char err[TCN_OPENSSL_ERROR_STRING_LENGTH];
         ERR_error_string_n(SSL_ERR_get(), err, TCN_OPENSSL_ERROR_STRING_LENGTH);
         tcn_Throw(e, "Unable to configure permitted SSL ciphers (%s)", err);
         rv = JNI_FALSE;
     }
-    TCN_FREE_CSTRING(ciphers);
+#ifndef HAVE_EXPORT_CIPHERS
+    free(buf);
+#endif
+free_cipherList:
+    TCN_FREE_CSTRING(cipherList);
+    return rv;
+}
+
+TCN_IMPLEMENT_CALL(jboolean, SSL, setCipherSuitesEx)(TCN_STDARGS, jlong ssl,
+                                                         jstring cipherSuites)
+{
+    SSL *ssl_ = J2P(ssl, SSL *);
+    TCN_ALLOC_CSTRING(cipherSuites);
+    jboolean rv = JNI_TRUE;
+    UNREFERENCED(o);
+
+    if (ssl_ == NULL) {
+        TCN_FREE_CSTRING(cipherSuites);
+        tcn_ThrowException(e, "ssl is null");
+        return JNI_FALSE;
+    }
+
+    if (!J2S(cipherSuites)) {
+        rv = JNI_FALSE;
+        goto free_cipherSuites;
+    }
+
+    if (!SSL_set_ciphersuites(ssl_, J2S(cipherSuites))) {
+        char err[TCN_OPENSSL_ERROR_STRING_LENGTH];
+        ERR_error_string_n(SSL_ERR_get(), err, TCN_OPENSSL_ERROR_STRING_LENGTH);
+        tcn_Throw(e, "Unable to configure permitted SSL cipher suites (%s)", err);
+        rv = JNI_FALSE;
+    }
+
+free_cipherSuites:
+    TCN_FREE_CSTRING(cipherSuites);
     return rv;
 }
 

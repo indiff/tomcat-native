@@ -18,8 +18,7 @@
 # NMAKEmakefile   Tomcat Native makefile.
 # Usage:
 #                 APR_DECLARE_STATIC=1  Use static version of the APR
-#                 ENABLE_OCSP=1         Enable OpenSSL OCSP code
-#                 OPENSSL_NEW_LIBS=1    Use new OpenSSL lib file names
+#                 DISABLE_OCSP=1        Disable OpenSSL OCSP code
 #                 DEBUG=1               Build DEBUG version of TCN
 #                 STATIC_CRT=Hybrid     Build using the 'Hybrid CRT' technique
 #
@@ -43,7 +42,7 @@ APR_LIB = libapr-1.lib
 CFLAGS = $(CFLAGS) -DAPR_DECLARE_STATIC
 APR_LIB = apr-1.lib
 !ENDIF
-!IF !DEFINED(ENABLE_OCSP)
+!IF DEFINED(DISABLE_OCSP)
 CFLAGS = $(CFLAGS) -DOPENSSL_NO_OCSP
 !ENDIF
 
@@ -72,16 +71,7 @@ LDIRS = $(LDIRS) /libpath:"$(WITH_OPENSSL)\out32"
 
 LFLAGS = $(LFLAGS) /version:2.0
 LIBS = $(LIBS) user32.lib gdi32.lib $(APR_LIB)
-!IF DEFINED(WITH_FIPS)
-LIBS = $(LIBS) libeayfips32.lib libeaycompat32.lib ssleay32.lib
-LFLAGS = $(LFLAGS) /NODEFAULTLIB:LIBCMT
-!ELSE
-!IF DEFINED(OPENSSL_NEW_LIBS)
 LIBS = $(LIBS) libssl.lib libcrypto.lib crypt32.lib
-!ELSE
-LIBS = $(LIBS) libeay32.lib ssleay32.lib
-!ENDIF
-!ENDIF
 
 CFLAGS = $(CFLAGS) -DZLIB_WINAPI -DNO_IDEA -DNO_RC5 -DNO_MDC2 -DOPENSSL_NO_IDEA \
 	-DOPENSSL_NO_RC5 -DOPENSSL_NO_MDC2 -DHAVE_SSL_SET_STATE=1
@@ -99,16 +89,7 @@ OBJECTS = \
 	$(WORKDIR)\sslutils.obj \
 	$(WORKDIR)\system.obj
 
-!IF DEFINED(WITH_FIPS)
-OBJECTS = $(OBJECTS) srclib\openssl\tmp32\fips_premain.obj
-!ENDIF
-
-!IF DEFINED(WITH_FIPS)
-FIPS_OPTS = /map
-LINK_WRAPPER = perl $(FIPSDIR)\bin\fipslink.pl
-!ELSE
 LINK_WRAPPER = $(LINK)
-!ENDIF
 
 BUILDLIB = $(PREFIX)\lib
 BUILDBIN = $(WORKDIR)\$(PROJECT).dll

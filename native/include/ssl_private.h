@@ -49,13 +49,6 @@
 #ifndef LIBRESSL_VERSION_NUMBER
 #include <openssl/provider.h>
 #endif
-/* Avoid tripping over an engine build installed globally and detected
- * when the user points at an explicit non-engine flavor of OpenSSL
- */
-#ifndef OPENSSL_NO_ENGINE
-#include <openssl/engine.h>
-extern ENGINE *tcn_ssl_engine;
-#endif
 
 #ifndef RAND_MAX
 #include <limits.h>
@@ -212,12 +205,32 @@ extern ENGINE *tcn_ssl_engine;
 #define HAVE_ECC
 #endif
 
-/* OCSP stapling */
+/* OCSP */
 #if !defined(OPENSSL_NO_OCSP) && defined(SSL_CTX_set_tlsext_status_cb)
 #define HAVE_OCSP
-#define OCSP_STATUS_OK        0
-#define OCSP_STATUS_REVOKED   1
-#define OCSP_STATUS_UNKNOWN   2
+#define OCSP_STATUS_OK              0
+#define OCSP_STATUS_REVOKED         1
+#define OCSP_STATUS_UNKNOWN         2
+#define OCSP_NO_CHECK_DEFAULT       1
+#define OCSP_SOFT_FAIL_DEFAULT      1
+#define OCSP_VERIFY_FLAGS_DEFAULT   0
+/* 15 minutes - aligns with JSSE */
+#define OCSP_MAX_SKEW             900
+/* 15 seconds - aligns with JSSE*/
+#define OCSP_TIMEOUT_DEFAULT 15000000
+/* Older versions of OpenSSL have a smaller range of OCSP error codes*/
+#if !defined(X509_V_ERR_OCSP_RESP_INVALID)
+#define X509_V_ERR_OCSP_RESP_INVALID      96
+#endif
+#if !defined(X509_V_ERR_OCSP_SIGNATURE_FAILURE)
+#define X509_V_ERR_OCSP_SIGNATURE_FAILURE 97
+#endif
+#if !defined(X509_V_ERR_OCSP_NOT_YET_VALID)
+#define X509_V_ERR_OCSP_NOT_YET_VALID     98
+#endif
+#if !defined(X509_V_ERR_OCSP_HAS_EXPIRED)
+#define X509_V_ERR_OCSP_HAS_EXPIRED       99
+#endif
 #endif
 
 #endif /* !defined(OPENSSL_NO_TLSEXT) && defined(SSL_set_tlsext_host_name) */
@@ -295,6 +308,9 @@ struct tcn_ssl_ctxt_t {
     int             alpn_selector_failure_behavior;
     /* End add from netty-tcnative */
     int             no_ocsp_check;
+    int             ocsp_soft_fail;
+    int             ocsp_timeout;
+    int             ocsp_verify_flags;
 };
 
 #ifdef HAVE_SSL_CONF_CMD
@@ -303,7 +319,10 @@ typedef struct tcn_ssl_conf_ctxt_t tcn_ssl_conf_ctxt_t;
 struct tcn_ssl_conf_ctxt_t {
     apr_pool_t      *pool;
     SSL_CONF_CTX    *cctx;
-    int     no_ocsp_check;
+    int             no_ocsp_check;
+    int             ocsp_soft_fail;
+    int             ocsp_timeout;
+    int             ocsp_verify_flags;
 };
 #endif
 
@@ -357,7 +376,7 @@ int         SSL_password_callback(char *, int, int, void *);
 void        SSL_BIO_close(BIO *);
 void        SSL_BIO_doref(BIO *);
 DH         *SSL_get_dh_params(unsigned keylen);
-DH         *SSL_dh_GetParamFromFile(const char *);
+EVP_PKEY   *SSL_dh_GetParamFromFile(const char *);
 #ifdef HAVE_ECC
 EC_GROUP   *SSL_ec_GetParamFromFile(const char *);
 #endif
