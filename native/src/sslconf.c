@@ -113,12 +113,29 @@ TCN_IMPLEMENT_CALL(jlong, SSLConf, make)(TCN_STDARGS, jlong pool,
     c->cctx = cctx;
     c->pool = p;
 
-    /* OCSP defaults */
+    /*
+     * Some Tomcat Native specific settings are also set via this representation
+     * of the SSL_CONF_CTX. This process is a little bit hacky. The expected
+     * call sequence is:
+     * - SSLConf.make() - create SSL_CONF_CTX and the associated Tomcat Native
+     *   object
+     * - SSLConf.check() - MUST be called for each Tomcat specific setting that
+     *   needs to be configured. May be called for OpenSSL settings in which
+     *   case the setting will be validated.
+     * - SSLConf.assign() - this actually *applies* the Tomcat Native specific
+     *   configuration to Tomcat Native as well as linking the SSL_CONF_CTX
+     *   object with the SSL_CTX object.
+     * - SSLConf.apply() - called for each OpenSSL setting. Any Tomcat specific
+     *   settings used here will be ignored.
+     * - SSLConf.finish() - MUST be called to complete the OpenSSL setting
+     *   process.
+     */
+    /* Initialise Tomcat Native specific OCSP defaults */
     c->no_ocsp_check     = OCSP_NO_CHECK_DEFAULT;
     c->ocsp_soft_fail    = OCSP_SOFT_FAIL_DEFAULT;
     c->ocsp_timeout      = OCSP_TIMEOUT_DEFAULT;
     c->ocsp_verify_flags = OCSP_VERIFY_FLAGS_DEFAULT;
-
+    
     /*
      * Let us cleanup the SSL_CONF context when the pool is destroyed
      */
@@ -135,11 +152,7 @@ TCN_IMPLEMENT_CALL(void, SSLConf, free)(TCN_STDARGS, jlong cctx)
     tcn_ssl_conf_ctxt_t *c = J2P(cctx, tcn_ssl_conf_ctxt_t *);
     UNREFERENCED_STDARGS;
     TCN_ASSERT(c != 0);
-    if (c->cctx != NULL) {
-        SSL_CONF_CTX_free(c->cctx);
-        c->cctx = NULL;
-        c->pool = NULL;
-    }
+    apr_pool_cleanup_run(c->pool, c, ssl_ctx_config_cleanup);
 }
 
 /* Check a command for an SSL_CONF context */
@@ -157,16 +170,20 @@ TCN_IMPLEMENT_CALL(jint, SSLConf, check)(TCN_STDARGS, jlong cctx,
     TCN_ASSERT(c->cctx != 0);
     if (!J2S(cmd)) {
         tcn_Throw(e, "Can not check null SSL_CONF command");
-        return SSL_THROW_RETURN;
+        rc = SSL_THROW_RETURN;
+        goto cleanup;
     }
+    /*
+     * Although this is the check method, this sets the Tomcat specific
+     * settings.
+     */
     if (!strcmp(J2S(cmd), "NO_OCSP_CHECK")) {
         if (!strcasecmp(J2S(value), "false"))
             c->no_ocsp_check = 0;
         else
             c->no_ocsp_check = 1;
-        TCN_FREE_CSTRING(cmd);
-        TCN_FREE_CSTRING(value);
-        return 1;
+        rc = 1;
+        goto cleanup;
     }
 
     if (!strcmp(J2S(cmd), "OCSP_SOFT_FAIL")) {
@@ -174,9 +191,8 @@ TCN_IMPLEMENT_CALL(jint, SSLConf, check)(TCN_STDARGS, jlong cctx,
             c->ocsp_soft_fail = 0;
         else
             c->ocsp_soft_fail = 1;
-        TCN_FREE_CSTRING(cmd);
-        TCN_FREE_CSTRING(value);
-        return 1;
+        rc = 1;
+        goto cleanup;
     }
 
     if (!strcmp(J2S(cmd), "OCSP_TIMEOUT")) {
@@ -187,9 +203,8 @@ TCN_IMPLEMENT_CALL(jint, SSLConf, check)(TCN_STDARGS, jlong cctx,
             // Tomcat configures timeout is millisecond. APR uses microseconds.
             c->ocsp_timeout = i * 1000;
         }
-        TCN_FREE_CSTRING(cmd);
-        TCN_FREE_CSTRING(value);
-        return 1;
+        rc = 1;
+        goto cleanup;
     }
 
     if (!strcmp(J2S(cmd), "OCSP_VERIFY_FLAGS")) {
@@ -199,9 +214,8 @@ TCN_IMPLEMENT_CALL(jint, SSLConf, check)(TCN_STDARGS, jlong cctx,
         if (!errno) {
             c->ocsp_verify_flags = i;
         }
-        TCN_FREE_CSTRING(cmd);
-        TCN_FREE_CSTRING(value);
-        return 1;
+        rc = 1;
+        goto cleanup;
     }
 
     SSL_ERR_clear();
@@ -211,35 +225,42 @@ TCN_IMPLEMENT_CALL(jint, SSLConf, check)(TCN_STDARGS, jlong cctx,
         char err[TCN_OPENSSL_ERROR_STRING_LENGTH];
         ERR_error_string_n(ec, err, TCN_OPENSSL_ERROR_STRING_LENGTH);
         tcn_Throw(e, "Could not determine SSL_CONF command type for '%s' (%s)", J2S(cmd), err);
-        return 0;
+        rc = SSL_THROW_RETURN;
+        goto cleanup;
     }
 
     if (value_type == SSL_CONF_TYPE_UNKNOWN) {
         tcn_Throw(e, "Invalid SSL_CONF command '%s', type unknown", J2S(cmd));
-        return SSL_THROW_RETURN;
+        rc = SSL_THROW_RETURN;
+        goto cleanup;
     }
 
     if (value_type == SSL_CONF_TYPE_FILE) {
         if (!J2S(value)) {
             tcn_Throw(e, "SSL_CONF command '%s' needs a non-empty file argument", J2S(cmd));
-            return SSL_THROW_RETURN;
+            rc = SSL_THROW_RETURN;
+            goto cleanup;
         }
         if (check_file(c->pool, J2S(value))) {
             tcn_Throw(e, "SSL_CONF command '%s' file '%s' does not exist or is empty", J2S(cmd), J2S(value));
-            return SSL_THROW_RETURN;
+            rc = SSL_THROW_RETURN;
+            goto cleanup;
         }
     }
     else if (value_type == SSL_CONF_TYPE_DIR) {
         if (!J2S(value)) {
             tcn_Throw(e, "SSL_CONF command '%s' needs a non-empty directory argument", J2S(cmd));
-            return SSL_THROW_RETURN;
+            rc = SSL_THROW_RETURN;
+            goto cleanup;
         }
         if (check_dir(c->pool, J2S(value))) {
             tcn_Throw(e, "SSL_CONF command '%s' directory '%s' does not exist", J2S(cmd), J2S(value));
-            return SSL_THROW_RETURN;
+            rc = SSL_THROW_RETURN;
+            goto cleanup;
         }
     }
 
+cleanup:
     TCN_FREE_CSTRING(cmd);
     TCN_FREE_CSTRING(value);
     return rc;
@@ -281,7 +302,8 @@ TCN_IMPLEMENT_CALL(jint, SSLConf, apply)(TCN_STDARGS, jlong cctx,
     TCN_ASSERT(c->cctx != 0);
     if (!J2S(cmd)) {
         tcn_Throw(e, "Can not apply null SSL_CONF command");
-        return SSL_THROW_RETURN;
+        rc = SSL_THROW_RETURN;
+        goto cleanup;
     }
 #ifndef HAVE_EXPORT_CIPHERS
     if (!strcmp(J2S(cmd), "CipherString")) {
@@ -290,10 +312,11 @@ TCN_IMPLEMENT_CALL(jint, SSLConf, apply)(TCN_STDARGS, jlong cctx,
          *  no matter what was given in the config.
          */
         len = strlen(J2S(value)) + strlen(SSL_CIPHERS_ALWAYS_DISABLED) + 1;
-        buf = malloc(len * sizeof(char *));
+        buf = malloc(len * sizeof(char));
         if (buf == NULL) {
             tcn_Throw(e, "Could not allocate memory to adjust cipher string");
-            return SSL_THROW_RETURN;
+            rc = SSL_THROW_RETURN;
+            goto cleanup;
         }
         memcpy(buf, SSL_CIPHERS_ALWAYS_DISABLED, strlen(SSL_CIPHERS_ALWAYS_DISABLED));
         memcpy(buf + strlen(SSL_CIPHERS_ALWAYS_DISABLED), J2S(value), strlen(J2S(value)));
@@ -301,45 +324,36 @@ TCN_IMPLEMENT_CALL(jint, SSLConf, apply)(TCN_STDARGS, jlong cctx,
     }
 #endif
     if (!strcmp(J2S(cmd), "NO_OCSP_CHECK")) {
-        if (!strcasecmp(J2S(value), "false"))
-            c->no_ocsp_check = 0;
-        else
-            c->no_ocsp_check = 1;
-        TCN_FREE_CSTRING(cmd);
-        TCN_FREE_CSTRING(value);
-        return 1;
+        /*
+         * Skip as this is a Tomcat specific setting that will have been set
+         * when check() was called.
+         */
+        rc = 1;
+        goto cleanup;
     }
     if (!strcmp(J2S(cmd), "OCSP_SOFT_FAIL")) {
-        if (!strcasecmp(J2S(value), "false"))
-            c->ocsp_soft_fail = 0;
-        else
-            c->ocsp_soft_fail = 1;
-        TCN_FREE_CSTRING(cmd);
-        TCN_FREE_CSTRING(value);
-        return 1;
+        /*
+         * Skip as this is a Tomcat specific setting that will have been set
+         * when check() was called.
+         */
+        rc = 1;
+        goto cleanup;
     }
     if (!strcmp(J2S(cmd), "OCSP_TIMEOUT")) {
-        int i;
-        errno = 0;
-        i = (int) strtol(J2S(value), NULL, 10);
-        if (!errno) {
-            // Tomcat configures timeout is millisecond. APR uses microseconds.
-            c->ocsp_timeout = i * 1000;
-        }
-        TCN_FREE_CSTRING(cmd);
-        TCN_FREE_CSTRING(value);
-        return 1;
+        /*
+         * Skip as this is a Tomcat specific setting that will have been set
+         * when check() was called.
+         */
+        rc = 1;
+        goto cleanup;
     }
     if (!strcmp(J2S(cmd), "OCSP_VERIFY_FLAGS")) {
-        int i;
-        errno = 0;
-        i = (int) strtol(J2S(value), NULL, 10);
-        if (!errno) {
-            c->ocsp_verify_flags = i;
-        }
-        TCN_FREE_CSTRING(cmd);
-        TCN_FREE_CSTRING(value);
-        return 1;
+        /*
+         * Skip as this is a Tomcat specific setting that will have been set
+         * when check() was called.
+         */
+        rc = 1;
+        goto cleanup;
     }
     SSL_ERR_clear();
     rc = SSL_CONF_cmd(c->cctx, J2S(cmd), buf != NULL ? buf : J2S(value));
@@ -352,8 +366,11 @@ TCN_IMPLEMENT_CALL(jint, SSLConf, apply)(TCN_STDARGS, jlong cctx,
         } else {
             tcn_Throw(e, "Could not apply SSL_CONF command '%s' with value '%s'", J2S(cmd), buf != NULL ? buf : J2S(value));
         }
-        return SSL_THROW_RETURN;
+        rc = SSL_THROW_RETURN;
+        goto cleanup;
     }
+
+cleanup:
 #ifndef HAVE_EXPORT_CIPHERS
     if (buf != NULL) {
         free(buf);

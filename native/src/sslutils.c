@@ -190,7 +190,7 @@ EVP_PKEY *SSL_dh_GetParamFromFile(const char *file)
         return NULL;
     evp = PEM_read_bio_Parameters_ex(bio, NULL, NULL, NULL);
     BIO_free(bio);
-    if (!EVP_PKEY_is_a(evp, "DH")) {
+    if (evp && !EVP_PKEY_is_a(evp, "DH")) {
         EVP_PKEY_free(evp);
         return NULL;
     }
@@ -198,16 +198,41 @@ EVP_PKEY *SSL_dh_GetParamFromFile(const char *file)
 }
 
 #ifdef HAVE_ECC
-EC_GROUP *SSL_ec_GetParamFromFile(const char *file)
+int SSL_ec_GetParamFromFile(const char *file)
 {
-    EC_GROUP *group = NULL;
+    EVP_PKEY *evp = NULL;
     BIO *bio;
+    char curve_name[80];
 
     if ((bio = BIO_new_file(file, "r")) == NULL)
-        return NULL;
-    group = PEM_read_bio_ECPKParameters(bio, NULL, NULL, NULL);
+        return NID_undef;
+    evp = PEM_read_bio_Parameters_ex(bio, NULL, NULL, NULL);
     BIO_free(bio);
-    return (group);
+    if (evp && !EVP_PKEY_is_a(evp, "EC")) {
+        EVP_PKEY_free(evp);
+        return NID_undef;
+    }
+
+    OSSL_PARAM param[] = {
+        OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME, curve_name, sizeof(curve_name)),
+        OSSL_PARAM_construct_end()
+    };
+
+    /* Query the curve name from the EVP_PKEY params object */
+    if (EVP_PKEY_get_params(evp, param) <= 0) {
+        EVP_PKEY_free(evp);
+        return NID_undef; /* Failed to retrieve the curve name */
+    }
+
+    /* Convert the curve name to the NID */
+    int nid = OBJ_sn2nid(curve_name);
+    if (nid == NID_undef) {
+        /* If the short name didn't resolve, try the long name */
+        nid = OBJ_ln2nid(curve_name);
+    }
+
+    EVP_PKEY_free(evp);
+    return nid; /* Returns the curve's NID, or NID_undef on failure */
 }
 #endif
 
@@ -866,19 +891,20 @@ err:
 
 /* Reads the response from the APR socket to a buffer, and parses the buffer to
    return the OCSP response  */
-#define ADDLEN 512
+#define BUFFER_SIZE 512
+#define OCSP_MAX_RESPONSE_SIZE 65536
 static OCSP_RESPONSE *ocsp_get_resp(apr_pool_t *mp, apr_socket_t *sock)
 {
     int buflen;
     apr_size_t totalread = 0;
     apr_size_t readlen;
-    char *buf, tmpbuf[ADDLEN];
+    char *buf, tmpbuf[BUFFER_SIZE];
     apr_status_t rv = APR_SUCCESS;
     apr_pool_t *p;
     OCSP_RESPONSE *resp;
 
     apr_pool_create(&p, mp);
-    buflen = ADDLEN;
+    buflen = BUFFER_SIZE;
     buf = apr_palloc(p, buflen);
     if (buf == NULL) {
         apr_pool_destroy(p);
@@ -889,13 +915,16 @@ static OCSP_RESPONSE *ocsp_get_resp(apr_pool_t *mp, apr_socket_t *sock)
         readlen = sizeof(tmpbuf);
         rv = apr_socket_recv(sock, tmpbuf, &readlen);
         if (rv == APR_SUCCESS) { /* if we have read something .. we can put it in the buffer*/
-            if ((totalread + readlen) >= buflen) {
-                buf = apr_xrealloc(buf, buflen, buflen + ADDLEN, p);
+            if ((totalread + readlen) > OCSP_MAX_RESPONSE_SIZE) {
+                apr_pool_destroy(p);
+                return NULL;
+            } else if ((totalread + readlen) >= buflen) {
+                buf = apr_xrealloc(buf, buflen, buflen * 2, p);
                 if (buf == NULL) {
                     apr_pool_destroy(p);
                     return NULL;
                 }
-                buflen += ADDLEN; /* if needed we enlarge the buffer */
+                buflen *= 2; /* if needed we enlarge the buffer */
             }
             memcpy(buf + totalread, tmpbuf, readlen); /* the copy to the buffer */
             totalread += readlen; /* update the total bytes read */

@@ -414,6 +414,12 @@ TCN_IMPLEMENT_CALL(jlong, SSLContext, make)(TCN_STDARGS, jlong pool,
         stringClass = (jclass) (*e)->NewGlobalRef(e, sClazz);
     }
 
+    /* Configure OCSP defaults here in case there is no SSL_CONF_CTX used. */
+    c->no_ocsp_check     = OCSP_NO_CHECK_DEFAULT;
+    c->ocsp_soft_fail    = OCSP_SOFT_FAIL_DEFAULT;
+    c->ocsp_timeout      = OCSP_TIMEOUT_DEFAULT;
+    c->ocsp_verify_flags = OCSP_VERIFY_FLAGS_DEFAULT;
+
     return P2J(c);
 init_failed:
     return 0;
@@ -541,7 +547,7 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCipherSuite)(TCN_STDARGS, jlong ctx,
      *  no matter what was given in the config.
      */
     len = strlen(J2S(cipherList)) + strlen(SSL_CIPHERS_ALWAYS_DISABLED) + 1;
-    buf = malloc(len * sizeof(char *));
+    buf = malloc(len * sizeof(char));
     if (buf == NULL) {
         rv = JNI_FALSE;
         goto free_cipherList;
@@ -946,9 +952,7 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCertificate)(TCN_STDARGS, jlong ctx,
     const char *p;
     char err[TCN_OPENSSL_ERROR_STRING_LENGTH];
 #ifdef HAVE_ECC
-    EC_GROUP *ecparams = NULL;
     int nid;
-    EC_KEY *eckey = NULL;
 #endif
     EVP_PKEY *evp;
 
@@ -1026,8 +1030,9 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCertificate)(TCN_STDARGS, jlong ctx,
     /* XXX Does this also work for pkcs12 or only for PEM files?
      * If only for PEM files move above to the PEM handling */
     if ((idx == 0) && (evp = SSL_dh_GetParamFromFile(cert_file))) {
-        SSL_CTX_set0_tmp_dh_pkey(c->ctx, evp);
-        EVP_PKEY_free(evp);
+        if (!SSL_CTX_set0_tmp_dh_pkey(c->ctx, evp)) {
+            EVP_PKEY_free(evp);
+        }
     }
 
 #ifdef HAVE_ECC
@@ -1036,14 +1041,10 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCertificate)(TCN_STDARGS, jlong ctx,
      */
     /* XXX Does this also work for pkcs12 or only for PEM files?
      * If only for PEM files move above to the PEM handling */
-    if ((ecparams = SSL_ec_GetParamFromFile(cert_file)) &&
-        (nid = EC_GROUP_get_curve_name(ecparams)) &&
-        (eckey = EC_KEY_new_by_curve_name(nid))) {
-        SSL_CTX_set_tmp_ecdh(c->ctx, eckey);
+    nid = SSL_ec_GetParamFromFile(cert_file);
+    if (nid != NID_undef) {
+        SSL_CTX_set1_groups(c->ctx, &nid, 1);
     }
-    /* OpenSSL assures us that _free() is NULL-safe */
-    EC_KEY_free(eckey);
-    EC_GROUP_free(ecparams);
 #endif
     SSL_CTX_set_dh_auto(c->ctx, 1);
 
