@@ -31,7 +31,32 @@
   branch started from the 1.2.33 tag.
   </p>
 </section>
-<section name="2.0.14" rtext="in development">
+<section name="2.0.15" rtext="developement in progress">
+  <changelog>
+    <fix>
+      Fix a memory leak when parsing certificates. Pull request <pr>44</pr>
+      provided by chenjp. (markt)
+    </fix>
+    <fix>
+      Fix two potential memory leaks on error paths identified by Copilot.
+      (markt)
+    </fix>
+  </changelog>
+</section>
+<section name="2.0.14" rtext="2026-03-10">
+  <changelog>
+    <scode>
+      Refactor access to ASN1_OCTET_STRING to use setters to fix errors when
+      building against the latest OpenSSL 4.0.x code. (markt)
+    </scode>
+    <fix>
+      Fix the handling of OCSP requests with multiple responder URIs. (jfclere)
+    </fix>
+    <fix>
+      Fix the handling of <code>TRY_AGAIN</code> responses to OCSP requests when
+      soft fail is disabled. (jfclere)
+    </fix>
+  </changelog>
 </section>
 <section name="2.0.13" rtext="2026-02-11">
   <changelog>
