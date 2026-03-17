@@ -177,9 +177,11 @@ jobs:
     needs: before_build
     strategy:
       matrix:
-        os: [windows-latest]
+        # os: [windows-latest]
+        os: [windows-2025-vs2026]
         build-type: [Release]   # Debug, Release
-        generator: [ "Visual Studio 17 2022" ]
+        # generator: [ "Visual Studio 17 2022" ]
+        generator: [ "Visual Studio 18 2026" ]
         arch: [ "x64" ] # "Win32", "x64"
         toolset: [ "v143" ]  # "v143", "v142"
         test-static: [ "OFF" ]  # "ON", "OFF"
