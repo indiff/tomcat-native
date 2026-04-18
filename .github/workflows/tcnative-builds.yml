@@ -180,8 +180,8 @@ jobs:
         os: [windows-latest]
         # os: [windows-2025-vs2026]
         build-type: [Release]   # Debug, Release
-        # generator: [ "Visual Studio 17 2022" ]
-        generator: [ "Visual Studio 18 2026" ]
+        generator: [ "Visual Studio 17 2022" ]
+        # generator: [ "Visual Studio 18 2026" ]
         arch: [ "x64" ] # "Win32", "x64"
         toolset: [ "v143" ]  # "v143", "v142"
         test-static: [ "OFF" ]  # "ON", "OFF"
@@ -234,6 +234,7 @@ jobs:
         git clone --depth 1 -b ${{ matrix.apr_branch }} https://github.com/indiff/apr.git ${{github.workspace}}\apr
         
         cd ${{github.workspace}}\apr
+        powershell -Command "(Get-Content .\include\apr.hw).Replace('0x0501', '0x0600') | Set-Content .\include\apr.hw"
         # cmake -B build -DCMAKE_INSTALL_PREFIX=c:\apr -DAPR_INSTALL_INCLUDE_DIR=include  -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=OFF -DAPR_BUILD_SHARED=ON -DAPR_BUILD_STATIC=ON  -DTEST_STATIC_LIBS=${{ matrix.test-static }} -G "${{ matrix.generator }}" -A ${{ matrix.arch }} -T ${{ matrix.toolset }}
         # call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64
         # cmake -B build -DCMAKE_INSTALL_PREFIX=c:\apr -DAPR_INSTALL_INCLUDE_DIR=include  -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=OFF -DAPU_HAVE_SQLITE3=OFF -DAPU_HAVE_ODBC=OFF -DBUILD_SHARED_LIBS=ON -DAPR_MODULAR_DSO=ON -DAPR_INSTALL_PRIVATE_H=ON -DTEST_STATIC_LIBS=${{ matrix.test-static }} -G "${{ matrix.generator }}" -A ${{ matrix.arch }} -T ${{ matrix.toolset }}
