@@ -259,7 +259,7 @@ jobs:
       # unzip openssl.zip -d ${{github.workspace}}\openssl
       if: true
       run: |
-        git clone --depth 1 -b openssl-3.6 https://github.com/openssl/openssl.git ${{github.workspace}}\openssl
+        git clone --depth 1 -b openssl-3.5 https://github.com/openssl/openssl.git ${{github.workspace}}\openssl
         cd ${{github.workspace}}\openssl
         mkdir _build
         cd _build
