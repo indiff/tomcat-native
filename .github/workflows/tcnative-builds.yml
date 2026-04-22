@@ -106,11 +106,12 @@ jobs:
           unzip /opt/gcc-indiff.zip -d /opt/gcc-indiff
           export CC=/opt/gcc-indiff/bin/gcc
 
-          if [[ "${{matrix.tc_branches}}" == *"main"*  ]]; then
-            git clone --filter=blob:none --depth 1 -b trunk https://github.com/indiff/apr.git /opt/apr
-          else
-            git clone --filter=blob:none --depth 1 -b ${{ matrix.apr_branch }} https://github.com/indiff/apr.git /opt/apr
-          fi
+          # if [[ "${{matrix.tc_branches}}" == *"main"*  ]]; then
+          #   git clone --filter=blob:none --depth 1 -b trunk https://github.com/indiff/apr.git /opt/apr
+          # else
+          #   git clone --filter=blob:none --depth 1 -b ${{ matrix.apr_branch }} https://github.com/indiff/apr.git /opt/apr
+          # fi
+          git clone --filter=blob:none --depth 1 -b ${{ matrix.apr_branch }} https://github.com/indiff/apr.git /opt/apr
           cd /opt/apr
           ./buildconf
           ${{ matrix.indiff_gcc }} ./configure --prefix=/usr/local/apr ${{ matrix.apr-config }}
