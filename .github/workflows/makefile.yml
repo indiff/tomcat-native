@@ -19,7 +19,7 @@ jobs:
             triplet: x64-windows
             arch: x64
             build-arch: X64
-            build-type: Debug
+            build-type: Release
             generator: "Ninja"
     runs-on: windows-latest
     steps:
