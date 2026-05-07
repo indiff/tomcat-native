@@ -3,7 +3,7 @@ name: Makefile CI
 on:
   push:
   pull_request:
-
+  workflow_dispatch:
 env:
   OPENSSL_VERSION: 3.6.2
   APR_VERSION: 1.7.6
