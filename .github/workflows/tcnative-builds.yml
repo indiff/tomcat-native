@@ -194,7 +194,7 @@ jobs:
         arch: [ "x64" ] # "Win32", "x64"
         toolset: [ "v143" ]  # "v143", "v142"
         test-static: [ "OFF" ]  # "ON", "OFF"
-        openssl-config: [ "no-threads no-shared VC-WIN64A no-tests enable-fips no-thread-pool no-quic" ]
+        openssl-config: [ "no-threads no-shared VC-WIN64A no-tests enable-fips no-thread-pool no-quic no-docs" ]
         tc_branches: [ "main", "1.3.x.nossl"]
         # apr_branch: [ "1.8.x"]
         apr_branch: [ "trunk"]
