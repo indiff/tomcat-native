@@ -305,7 +305,7 @@ jobs:
         echo %JAVA_HOME_8_X64%
         set JAVA_HOME=%JAVA_HOME_8_X64%
         set WINVER=WIN7
-        nmake -f NMAKEMakefile CPU=${{matrix.arch}} ^
+        nmake -f NMAKEMakefile CPU=X64 ^
             WITH_APR=c:\apr ^
             WITH_OPENSSL=C:\vcpkg\packages\openssl_${{ matrix.triplet }} ^
             APR_DECLARE_STATIC=1 ^
