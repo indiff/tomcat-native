@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+permissions:
+  contents: read
+
 env:
   OPENSSL_VERSION: 3.6.2
   APR_VERSION: 1.7.6
@@ -23,7 +26,7 @@ jobs:
             generator: "Ninja"
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Download Openssl using curl and Expand-Archive
       shell: pwsh
       run: |
@@ -51,7 +54,7 @@ jobs:
             set PATH=%PATH%;%CD%\nasm-%NASM_VERSION%
             dir %CD%\nasm-%NASM_VERSION%
             cd openssl-openssl-%OPENSSL_VERSION%
-            call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=${{ matrix.arch }}
+            call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=${{ matrix.arch }}
             C:\strawberry\perl\bin\perl Configure no-shared VC-WIN64A --prefix=C:\OPENSSL
             nmake
             nmake install
@@ -68,7 +71,7 @@ jobs:
       run: |
             echo on
             cd apr\apr-%APR_VERSION%
-            call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=${{ matrix.arch }}
+            call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=${{ matrix.arch }}
             nmake -f Makefile.win ARCH="x64 Release" buildall PREFIX=C:\APR
             nmake -f Makefile.win ARCH="x64 Release" install PREFIX=C:\APR
             mkdir C:\APR\include\arch\win32
@@ -78,11 +81,11 @@ jobs:
       shell: cmd
       run: |
             echo on
-            call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=${{ matrix.arch }}
+            call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=${{ matrix.arch }}
             cd native
             echo "Building for ${{ matrix.build-arch }}"
             nmake  -f NMAKEmakefile CPU=${{ matrix.build-arch }} WITH_APR=C:\APR WITH_OPENSSL=C:\OPENSSL APR_DECLARE_STATIC=1 STATIC_CRT=Hybrid
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: windows-artifact
-        path: native\WIN7_X64_DLL_RELEASE\tcnative-2.dll
+        path: native\WIN10_X64_DLL_RELEASE\tcnative-2.dll

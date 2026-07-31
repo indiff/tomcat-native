@@ -25,20 +25,16 @@
 #                 CPU       Compile for specified CPU. Supported CPU's are:
 #                           X86 (Common x86 architecture)
 #                           X64 (AMD64/EMT64 architecture)
-#                           I64 (Intel IA64 architecture)
 #                           If not specified it will default to the
 #                           PROCESSOR_ARCHITECTURE environment variable
-#                           or to the X86 if not specified.
+#                           or to the X64 if not specified.
 #                 WINVER    Compile for specified Windows version
-#                           WIN10   for Windows 10 and up
-#                           WIN81   for Windows 8.1 and up
-#                           WIN8    for Windows 8 and up
-#                           WIN7    for Windows 7 and up (default)
+#                           WIN10   for Windows 10 and up (default)
+#                           Windows 11 uses the same WIN10 WINVER.
 #                           Deprecated targets (may not even compile):
-#                               VISTA   for Windows Vista / Server 2008 and up
-#                               WIN2003 for Windows 2003 and up
-#                               WINXP   for Windows XP and up
-#                               WIN2K   for Windows 2000 and up
+#                               WIN81   for Windows 8.1 and up
+#                               WIN8    for Windows 8 and up
+#                               WIN7    for Windows 7 and up
 #                 BUILD     Build version
 #                           RETAIL or RELEASE (default)
 #                           DEBUG
@@ -47,7 +43,7 @@
 #                           GUI Windows GUI executable
 #                           DLL Dynamic Link Library
 #                           LIB Static library
-#               UNICODE     Build unicode version
+#                 UNICODE   Build unicode version
 #                           If definded and not empty -D_UNICODE is added
 #                           to CFLAGS; -D_MBCS is added otherwise
 # Environment variables  used:
@@ -102,15 +98,12 @@ CPU=X86
 !IF "$(BUILD_CPU)" == "amd64" || "$(BUILD_CPU)" == "x86_64" || "$(BUILD_CPU)" == "x64"
 CPU=X64
 !ENDIF
-!IF "$(BUILD_CPU)" == "ia64" || "$(BUILD_CPU)" == "i64"
-CPU=I64
-!ENDIF
 !ENDIF
 # Figure out CPU from the current host
 !IF !DEFINED(CPU) || "$(CPU)" == ""
 !IF "$(PROCESSOR_ARCHITECTURE)" == ""
 !IF "$(PROCESSOR_ARCHITEW6432)" == ""
-CPU=X86
+CPU=X64
 !ELSE
 CPU=$(PROCESSOR_ARCHITEW6432)
 !ENDIF
@@ -125,9 +118,7 @@ CPU=$(PROCESSOR_ARCHITECTURE)
 
 !IF "$(CPU)" != "X86"
 !IF "$(CPU)" != "X64"
-!IF "$(CPU)" != "I64"
-!ERROR Must specify CPU environment variable (X86, X64, I64) $(CPU)
-!ENDIF
+!ERROR Must specify CPU environment variable (X86, X64) $(CPU)
 !ENDIF
 !ENDIF
 
@@ -146,7 +137,7 @@ TARGET=EXE
 !ENDIF
 
 !IF !DEFINED(WINVER) || "$(WINVER)" == ""
-WINVER=WIN7
+WINVER=WIN10
 !ENDIF
 
 
@@ -159,7 +150,7 @@ NMAKE_WINVER = 0x0603
 !ELSEIF "$(WINVER)" == "WIN10"
 NMAKE_WINVER = 0x0A00
 !ELSE
-!ERROR Must specify WINVER environment variable (WIN7, WIN8, WIN81, WIN10)
+!ERROR Must specify WINVER environment variable (WIN10, WIN7, WIN8, WIN81)
 !ENDIF
 
 NMAKE_WINNT = -DWINNT -D_WINNT -D_WIN32_WINNT=$(NMAKE_WINVER) -DWINVER=$(NMAKE_WINVER)
@@ -206,10 +197,6 @@ MACHINE_LC=i386
 CPU_CFLAGS = -D_AMD64_=1 -DWIN64 -D_WIN64
 MACHINE=AMD64
 MACHINE_LC=amd64
-!ELSEIF "$(CPU)" == "I64"
-CPU_CFLAGS = -D_IA64_=1 -DWIN64 -D_WIN64
-MACHINE=IA64
-MACHINE_LC=ia64
 !ENDIF
 
 !IF "$(BUILD)" == "RELEASE"
@@ -302,7 +289,7 @@ RCFLAGS = $(RCFLAGS) $(EXTRA_RCFLAGS)
 !ENDIF
 
 
-# Build Target dir e.g. WINNT_I386_RELEASE_DLL
+# Build Target dir e.g. WIN10_X64_DLL_RELEASE
 !IF !DEFINED(WORKDIR) || "$(WORKDIR)" == ""
 !IF !DEFINED(WORKDIR_EXT) || "$(WORKDIR_EXT)" == ""
 WORKDIR = $(WINVER)_$(CPU)_$(TARGET)_$(BUILD)
@@ -330,9 +317,6 @@ AFLAGS = /coff /Zi /c
 !ELSEIF "$(CPU)" == "X64"
 ML = ml64.exe
 AFLAGS = /Zi /c
-!ELSEIF "$(CPU)" == "I64"
-ML = ml64.exe
-AFLAGS = /coff /Zi /c
 !ENDIF
 !ENDIF
 
