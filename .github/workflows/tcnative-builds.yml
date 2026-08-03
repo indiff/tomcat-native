@@ -369,10 +369,10 @@ jobs:
             )
             Write-Host "Building with OpenSSL support"
         } else {
-            # $nmakeArgs += @(
-            #     "EXTRA_LIBS='bcrypt.lib ucrt.lib libcmt.lib'",
-            #     "OPENSSL_NEW_LIBS=1"
-            # )    
+            $nmakeArgs += @(
+                 "EXTRA_LIBS='bcrypt.lib ucrt.lib libcmt.lib'",
+                 "OPENSSL_NEW_LIBS=1"
+            )    
             Write-Host "Building without OpenSSL support (nossl branch)"
         }
         
