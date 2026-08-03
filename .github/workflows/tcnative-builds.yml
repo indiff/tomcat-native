@@ -307,12 +307,18 @@ jobs:
         set JAVA_HOME=%JAVA_HOME_8_X64%
         set WINVER=WIN7
         cd ${{github.workspace}}\tcnative\native
-        mkdir build && cd build
-        cmake .. -DCMAKE_INSTALL_PREFIX=./install ^
-                 -DAPR_ROOT=C:/apr ^
-                 -DOPENSSL_ROOT_DIR=C:/vcpkg/packages/openssl_${{ matrix.triplet }} ^
-                 -DCMAKE_BUILD_TYPE=${{ matrix.build-type }}
-        cmake --build . --config ${{ matrix.build-type }}
+
+        nmake -f NMAKEMakefile 
+          WITH_APR=C:\apr ^
+          WITH_OPENSSL=C:\vcpkg\packages\openssl_${{ matrix.triplet }} ^
+          CPU=X64 APR_DECLARE_STATIC=1 STATIC_CRT=Hybrid OPENSSL_NEW_LIBS=1
+         
+        # mkdir build && cd build
+        # cmake .. -DCMAKE_INSTALL_PREFIX=./install ^
+        #          -DAPR_ROOT=C:/apr ^
+        #          -DOPENSSL_ROOT_DIR=C:/vcpkg/packages/openssl_${{ matrix.triplet }} ^
+        #          -DCMAKE_BUILD_TYPE=${{ matrix.build-type }}
+        # cmake --build . --config ${{ matrix.build-type }}
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
