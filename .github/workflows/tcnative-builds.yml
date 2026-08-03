@@ -260,7 +260,7 @@ jobs:
             git clone --depth 1 -b ${{ matrix.apr_branch }} https://github.com/indiff/apr.git ${{github.workspace}}\apr
             cd ${{github.workspace}}\apr
             mkdir C:\vcpkg\packages\openssl_${{ matrix.triplet }}\include -Force
-            cmake -B build -DCMAKE_C_FLAGS="-DAPR_DECLARE_STATIC=1" -DCMAKE_INSTALL_PREFIX=c:\apr -DINSTALL_PDB=OFF -DAPR_INSTALL_INCLUDE_DIR=include -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=ON -DAPU_HAVE_SQLITE3=OFF -DAPU_HAVE_ODBC=OFF -DBUILD_SHARED_LIBS=OFF -DAPR_MODULAR_DSO=OFF -DAPR_INSTALL_PRIVATE_H=ON -DAPU_HAVE_CRYPTO=ON -DAPU_HAVE_ICONV=ON -DTEST_STATIC_LIBS=OFF -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DOPENSSL_ROOT_DIR=C:\vcpkg\packages\openssl_${{ matrix.triplet }} -DOPENSSL_INCLUDE_DIR=C:\vcpkg\packages\openssl_${{ matrix.triplet }}\include -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -G "Ninja"
+            cmake -B build -DCMAKE_INSTALL_PREFIX=c:\apr -DINSTALL_PDB=OFF -DAPR_INSTALL_INCLUDE_DIR=include -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=OFF -DAPU_HAVE_SQLITE3=OFF -DAPU_HAVE_ODBC=OFF -DBUILD_SHARED_LIBS=OFF -DAPR_MODULAR_DSO=ON -DAPR_INSTALL_PRIVATE_H=ON -DTEST_STATIC_LIBS=${{ matrix.test-static }} -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -G "Ninja"
         } else {
             vcpkg install libiconv:${{ matrix.triplet }}
             git clone --depth 1 https://github.com/indiff/apr.git ${{github.workspace}}\apr
