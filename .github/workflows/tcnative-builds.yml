@@ -312,7 +312,7 @@ jobs:
             WITH_OPENSSL=C:\vcpkg\packages\openssl_${{ matrix.triplet }} ^
             APR_DECLARE_STATIC=1 ^
             OPENSSL_NEW_LIBS=1 ^
-            APR_HAVE_IPV6=ON ^
+            APR_HAVE_IPV6=ON EXTRA_LIBS=bcrypt.lib ^
             STATIC_CRT=Hybrid
             
         cd WIN7_X64_DLL_RELEASE
