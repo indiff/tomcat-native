@@ -241,7 +241,7 @@ jobs:
       # curl -L -o openssl.zip https://github.com/openssl/openssl/archive/refs/tags/openssl-$env:OPENSSL_VERSION.zip
       # unzip openssl.zip -d ${{github.workspace}}\openssl
       # VC-WIN64A no-makedepend -DOSSL_WINCTX=openssl
-      if: ${{ matrix.tc_branches != '1.3.x.nossl' }}
+      if: ${{ matrix.tc_branches != '1.3.x.nossl.shit' }}
       run: |
         git clone --depth 1 -b ${{ matrix.openssl_branch }} https://github.com/openssl/openssl.git ${{github.workspace}}\openssl
         cd ${{github.workspace}}\openssl
