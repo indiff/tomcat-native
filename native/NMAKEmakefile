@@ -79,8 +79,7 @@ LFLAGS = $(LFLAGS) libeayfips32.lib libeaycompat32.lib ssleay32.lib /NODEFAULTLI
 #LFLAGS = $(LFLAGS) libssl.lib libcrypto.lib crypt32.lib
 LFLAGS = $(LFLAGS)
 !ELSE
-#LFLAGS = $(LFLAGS) libeay32.lib ssleay32.lib
-LFLAGS = $(LFLAGS)
+LFLAGS = $(LFLAGS) libeay32.lib ssleay32.lib
 !ENDIF
 !ENDIF
 
