@@ -247,7 +247,7 @@ jobs:
             cd openssl-OpenSSL_1_1_1w
             mkdir _build
             cd _build
-            perl ..\Configure --banner=Configured --prefix=C:\vcpkg\packages\openssl_${{ matrix.triplet }} ${{ matrix.openssl-config }}
+            perl ..\Configure --banner=Configured --prefix=C:\vcpkg\packages\openssl_${{ matrix.triplet }} no-shared VC-WIN64A
             perl configdata.pm --dump
             nmake /S
             nmake install
