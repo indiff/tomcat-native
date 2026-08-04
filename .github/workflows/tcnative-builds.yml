@@ -259,8 +259,11 @@ jobs:
         if ("${{ matrix.tc_branches }}" -eq "1.3.x.nossl" ) {
             git clone --depth 1 -b ${{ matrix.apr_branch }} https://github.com/indiff/apr.git ${{github.workspace}}\apr
             cd ${{github.workspace}}\apr
+            (Get-Content .\include\apr.hw).Replace('0x0501', '0x0600') | Set-Content .\include\apr.hw	
             mkdir C:\vcpkg\packages\openssl_${{ matrix.triplet }}\include -Force
-            cmake -B build -DCMAKE_INSTALL_PREFIX=c:\apr -DINSTALL_PDB=OFF -DAPR_INSTALL_INCLUDE_DIR=include -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=OFF -DAPU_HAVE_SQLITE3=OFF -DAPU_HAVE_ODBC=OFF -DBUILD_SHARED_LIBS=OFF -DAPR_MODULAR_DSO=ON -DAPR_INSTALL_PRIVATE_H=ON -DTEST_STATIC_LIBS=${{ matrix.test-static }} -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -G "Ninja"
+            # cmake -B build -DCMAKE_INSTALL_PREFIX=c:\apr -DINSTALL_PDB=OFF -DAPR_INSTALL_INCLUDE_DIR=include -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=OFF -DAPU_HAVE_SQLITE3=OFF -DAPU_HAVE_ODBC=OFF -DBUILD_SHARED_LIBS=OFF -DAPR_MODULAR_DSO=ON -DAPR_INSTALL_PRIVATE_H=ON -DTEST_STATIC_LIBS=${{ matrix.test-static }} -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -G "Ninja"
+            cmake -B build -DCMAKE_INSTALL_PREFIX=c:\apr -DINSTALL_PDB=OFF -DAPR_INSTALL_INCLUDE_DIR=include  -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DAPR_BUILD_TESTAPR=OFF -DAPR_HAVE_IPV6=OFF -DAPU_HAVE_SQLITE3=OFF -DAPU_HAVE_ODBC=OFF -DBUILD_SHARED_LIBS=ON -DAPR_MODULAR_DSO=ON -DAPR_INSTALL_PRIVATE_H=ON -DTEST_STATIC_LIBS=${{ matrix.test-static }} -DVCPKG_TARGET_TRIPLET=x64-window -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -G "Ninja"
+
         } else {
             vcpkg install libiconv:${{ matrix.triplet }}
             git clone --depth 1 https://github.com/indiff/apr.git ${{github.workspace}}\apr
@@ -356,23 +359,23 @@ jobs:
             "CPU=X64",
             "WITH_APR=c:\apr",
             "WITH_OPENSSL=C:\vcpkg\packages\openssl_${{ matrix.triplet }}",
-            "APR_DECLARE_STATIC=1",
-            "APR_HAVE_IPV6=ON",
-            "STATIC_CRT=Hybrid"
+            "APR_DECLARE_STATIC=1"
         )
         
         # 判断是否为 nossl 分支
         if ("${{matrix.tc_branches}}" -ne "1.3.x.nossl") {
             $nmakeArgs += @(
                 "EXTRA_LIBS=bcrypt.lib",
+                "APR_HAVE_IPV6=ON",
+                "STATIC_CRT=Hybrid",
                 "OPENSSL_NEW_LIBS=1"
             )
             Write-Host "Building with OpenSSL support"
         } else {
-            # $nmakeArgs += @(
-            #      "EXTRA_LIBS='bcrypt.lib libcmt.lib'",
-            #      "OPENSSL_NEW_LIBS=1"
-            # )    
+            $nmakeArgs += @(
+                  "APR_HAVE_IPV6=OFF",
+                  "OPENSSL_NEW_LIBS=0"
+            )    
             Write-Host "Building without OpenSSL support (nossl branch)"
         }
         
