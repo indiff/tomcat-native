@@ -2,6 +2,8 @@ name: Makefile CI
 
 on:
   push:
+      paths:
+      - '**/makefile.yml'
   pull_request:
   workflow_dispatch:
 permissions:
