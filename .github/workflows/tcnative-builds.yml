@@ -370,13 +370,13 @@ jobs:
         $nmakeArgs = @(
             "CPU=X64",
             "WITH_APR=c:\apr",
+            "WITH_OPENSSL=C:\vcpkg\packages\openssl_${{ matrix.triplet }}",
             "APR_DECLARE_STATIC=1"
         )
         
         # 判断是否为 nossl 分支
         if ("${{matrix.tc_branches}}" -ne "1.3.x.nossl") {
             $nmakeArgs += @(
-                "WITH_OPENSSL=C:\vcpkg\packages\openssl_${{ matrix.triplet }}",
                 "EXTRA_LIBS=bcrypt.lib",
                 "APR_HAVE_IPV6=ON",
                 "STATIC_CRT=Hybrid",
