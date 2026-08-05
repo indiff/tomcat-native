@@ -193,8 +193,9 @@ jobs:
         test-static: [ "OFF" ]  # "ON", "OFF"
         openssl-config: [ "no-shared VC-WIN64A no-tests enable-fips no-quic no-docs" ] # no-threads no-thread-pool 
         tc_branches: [ "main", "1.3.x.nossl"]
-        # apr_branch: [ "1.8.x"]
-        apr_branch: [ "trunk"]
+        apr1_branch: [ "1.8.x"]
+        apr2_branch: [ "trunk"]
+        apr1_openssl_branch: [ "openssl-3.0"]
         openssl_branch: [ "openssl-3.6"]
         triplet: [ x64-windows ]
       fail-fast: false
@@ -242,9 +243,11 @@ jobs:
       run: |
         if ( "${{ matrix.tc_branches }}" -eq "1.3.x.nossl" ) {
             echo on
-            curl -L -o openssl.zip https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1w.zip
-            Expand-Archive openssl.zip -DestinationPath .
-            cd openssl-OpenSSL_1_1_1w
+            # curl -L -o openssl.zip https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1w.zip
+            # Expand-Archive openssl.zip -DestinationPath .
+            # cd openssl-OpenSSL_1_1_1w
+            git clone --depth 1 -b ${{ matrix.apr1_openssl_branch }} https://github.com/openssl/openssl.git ${{github.workspace}}\openssl
+            cd ${{github.workspace}}\openssl
             mkdir _build
             cd _build
             perl ..\Configure --banner=Configured --prefix=C:\vcpkg\packages\openssl_${{ matrix.triplet }} no-shared VC-WIN64A
@@ -268,7 +271,7 @@ jobs:
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: |
         if ("${{ matrix.tc_branches }}" -eq "1.3.x.nossl" ) {
-            git clone --depth 1 -b ${{ matrix.apr_branch }} https://github.com/indiff/apr.git ${{github.workspace}}\apr
+            git clone --depth 1 -b ${{ matrix.apr1_branch }} https://github.com/indiff/apr.git ${{github.workspace}}\apr
             cd ${{github.workspace}}\apr
             if (Test-Path -Path ".\include\apr.hw") {
                 (Get-Content .\include\apr.hw).Replace('0x0501', '0x0600') | Set-Content .\include\apr.hw
