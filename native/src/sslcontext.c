@@ -35,7 +35,6 @@ static apr_status_t ssl_context_cleanup(void *data)
     if (c) {
         int i;
         c->crl = NULL;
-        c->store = NULL;
         if (c->ctx)
             SSL_CTX_free(c->ctx);
         c->ctx = NULL;
@@ -49,12 +48,8 @@ static apr_status_t ssl_context_cleanup(void *data)
                 c->keys[i] = NULL;
             }
         }
-        if (c->bio_is) {
-            SSL_BIO_close(c->bio_is);
-            c->bio_is = NULL;
-        }
         if (c->bio_os) {
-            SSL_BIO_close(c->bio_os);
+            BIO_free(c->bio_os);
             c->bio_os = NULL;
         }
 
@@ -65,12 +60,6 @@ static apr_status_t ssl_context_cleanup(void *data)
             c->verifier = NULL;
         }
         c->verifier_method = NULL;
-
-        if (c->next_proto_data) {
-            free(c->next_proto_data);
-            c->next_proto_data = NULL;
-        }
-        c->next_proto_len = 0;
 
         if (c->alpn_proto_data) {
             free(c->alpn_proto_data);
@@ -119,7 +108,6 @@ TCN_IMPLEMENT_CALL(jlong, SSLContext, make)(TCN_STDARGS, jlong pool,
 
     SSL_callback_add_keylog(ctx);
 
-    c->protocol = protocol;
     c->mode     = mode;
     c->ctx      = ctx;
     c->pool     = p;
@@ -202,21 +190,15 @@ TCN_IMPLEMENT_CALL(jlong, SSLContext, make)(TCN_STDARGS, jlong pool,
     /* Longer session timeout */
     SSL_CTX_set_timeout(c->ctx, 14400);
 
-    EVP_Digest((const unsigned char *)SSL_DEFAULT_VHOST_NAME,
-               (unsigned long)((sizeof SSL_DEFAULT_VHOST_NAME) - 1),
-               &(c->context_id[0]), NULL, EVP_sha1(), NULL);
-
     /* Set default Certificate verification level
      * and depth for the Client Authentication
      */
     c->verify_depth  = 1;
     c->verify_mode   = SSL_CVERIFY_UNSET;
-    c->shutdown_type = SSL_SHUTDOWN_TYPE_UNSET;
 
     /* Set default password callback */
     SSL_CTX_set_default_passwd_cb(c->ctx, (pem_password_cb *)SSL_password_callback);
     SSL_CTX_set_default_passwd_cb_userdata(c->ctx, (void *)(&tcn_password_callback));
-    SSL_CTX_set_info_callback(c->ctx, SSL_callback_handshake);
 
     /*
      * Let us cleanup the ssl context when the pool is destroyed
@@ -253,45 +235,6 @@ TCN_IMPLEMENT_CALL(jint, SSLContext, free)(TCN_STDARGS, jlong ctx)
     return apr_pool_cleanup_run(c->pool, c, ssl_context_cleanup);
 }
 
-TCN_IMPLEMENT_CALL(void, SSLContext, setContextId)(TCN_STDARGS, jlong ctx,
-                                                   jstring id)
-{
-    tcn_ssl_ctxt_t *c = J2P(ctx, tcn_ssl_ctxt_t *);
-    TCN_ALLOC_CSTRING(id);
-
-    TCN_ASSERT(ctx != 0);
-    UNREFERENCED(o);
-    if (J2S(id)) {
-        EVP_Digest((const unsigned char *)J2S(id),
-                   (unsigned long)strlen(J2S(id)),
-                   &(c->context_id[0]), NULL, EVP_sha1(), NULL);
-    }
-    TCN_FREE_CSTRING(id);
-}
-
-TCN_IMPLEMENT_CALL(void, SSLContext, setBIO)(TCN_STDARGS, jlong ctx,
-                                             jlong bio, jint dir)
-{
-    tcn_ssl_ctxt_t *c = J2P(ctx, tcn_ssl_ctxt_t *);
-    BIO *bio_handle   = J2P(bio, BIO *);
-
-    UNREFERENCED_STDARGS;
-    TCN_ASSERT(ctx != 0);
-    if (dir == 0) {
-        if (c->bio_os && c->bio_os != bio_handle)
-            SSL_BIO_close(c->bio_os);
-        c->bio_os = bio_handle;
-    }
-    else if (dir == 1) {
-        if (c->bio_is && c->bio_is != bio_handle)
-            SSL_BIO_close(c->bio_is);
-        c->bio_is = bio_handle;
-    }
-    else
-        return;
-    SSL_BIO_doref(bio_handle);
-}
-
 TCN_IMPLEMENT_CALL(void, SSLContext, setOptions)(TCN_STDARGS, jlong ctx,
                                                  jint opt)
 {
@@ -299,12 +242,7 @@ TCN_IMPLEMENT_CALL(void, SSLContext, setOptions)(TCN_STDARGS, jlong ctx,
 
     UNREFERENCED_STDARGS;
     TCN_ASSERT(ctx != 0);
-#ifndef SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION
-    /* Clear the flag if not supported */
-    if (opt & 0x00040000)
-        opt &= ~0x00040000;
-#endif
-    SSL_CTX_set_options(c->ctx, opt);
+    SSL_CTX_set_options(c->ctx, ((jlong) opt) & 0xFFFFFFFFLL);
 }
 
 TCN_IMPLEMENT_CALL(jint, SSLContext, getOptions)(TCN_STDARGS, jlong ctx)
@@ -324,17 +262,35 @@ TCN_IMPLEMENT_CALL(void, SSLContext, clearOptions)(TCN_STDARGS, jlong ctx,
 
     UNREFERENCED_STDARGS;
     TCN_ASSERT(ctx != 0);
-    SSL_CTX_clear_options(c->ctx, opt);
+    SSL_CTX_clear_options(c->ctx, ((jlong) opt) & 0xFFFFFFFFLL);
 }
 
-TCN_IMPLEMENT_CALL(void, SSLContext, setQuietShutdown)(TCN_STDARGS, jlong ctx,
-                                                       jboolean mode)
+TCN_IMPLEMENT_CALL(void, SSLContext, setOptionsLong)(TCN_STDARGS, jlong ctx, jlong opt)
 {
     tcn_ssl_ctxt_t *c = J2P(ctx, tcn_ssl_ctxt_t *);
 
     UNREFERENCED_STDARGS;
     TCN_ASSERT(ctx != 0);
-    SSL_CTX_set_quiet_shutdown(c->ctx, mode ? 1 : 0);
+    SSL_CTX_set_options(c->ctx, opt);
+}
+
+TCN_IMPLEMENT_CALL(jlong, SSLContext, getOptionsLong)(TCN_STDARGS, jlong ctx)
+{
+    tcn_ssl_ctxt_t *c = J2P(ctx, tcn_ssl_ctxt_t *);
+
+    UNREFERENCED_STDARGS;
+    TCN_ASSERT(ctx != 0);
+
+    return SSL_CTX_get_options(c->ctx);
+}
+
+TCN_IMPLEMENT_CALL(void, SSLContext, clearOptionsLong)(TCN_STDARGS, jlong ctx, jlong opt)
+{
+    tcn_ssl_ctxt_t *c = J2P(ctx, tcn_ssl_ctxt_t *);
+
+    UNREFERENCED_STDARGS;
+    TCN_ASSERT(ctx != 0);
+    SSL_CTX_clear_options(c->ctx, opt);
 }
 
 TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCipherSuite)(TCN_STDARGS, jlong ctx,
@@ -563,10 +519,8 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCACertificate)(TCN_STDARGS,
         rv = JNI_FALSE;
         goto cleanup;
     }
-    c->store = SSL_CTX_get_cert_store(c->ctx);
     if (c->mode) {
         STACK_OF(X509_NAME) *ca_certs;
-        c->ca_certs++;
         ca_certs = SSL_CTX_get_client_CA_list(c->ctx);
         if (ca_certs == NULL) {
             ca_certs = SSL_load_client_CA_file(J2S(file));
@@ -603,24 +557,17 @@ cleanup:
     return rv;
 }
 
-TCN_IMPLEMENT_CALL(void, SSLContext, setShutdownType)(TCN_STDARGS, jlong ctx,
-                                                      jint type)
-{
-    tcn_ssl_ctxt_t *c = J2P(ctx, tcn_ssl_ctxt_t *);
-
-    UNREFERENCED_STDARGS;
-    TCN_ASSERT(ctx != 0);
-    c->shutdown_type = type;
-}
-
-TCN_IMPLEMENT_CALL(void, SSLContext, setVerify)(TCN_STDARGS, jlong ctx,
-                                                jint level, jint depth)
+TCN_IMPLEMENT_CALL(void, SSLContext, setVerify)(TCN_STDARGS, jlong ctx, jint level, jint depth)
 {
     tcn_ssl_ctxt_t *c = J2P(ctx, tcn_ssl_ctxt_t *);
     int verify = SSL_VERIFY_NONE;
-
     UNREFERENCED(o);
-    TCN_ASSERT(ctx != 0);
+
+    if (c == NULL) {
+        tcn_ThrowException(e, "SSLContext is null");
+        return;
+    }
+
     c->verify_mode = level;
 
     if (c->verify_mode == SSL_CVERIFY_UNSET)
@@ -635,8 +582,6 @@ TCN_IMPLEMENT_CALL(void, SSLContext, setVerify)(TCN_STDARGS, jlong ctx,
     if ((c->verify_mode == SSL_CVERIFY_OPTIONAL) ||
         (c->verify_mode == SSL_CVERIFY_OPTIONAL_NO_CA))
         verify |= SSL_VERIFY_PEER;
-    if (!c->store)
-        c->store = SSL_CTX_get_cert_store(c->ctx);
 
     SSL_CTX_set_verify(c->ctx, verify, SSL_callback_SSL_verify);
 }
@@ -743,19 +688,6 @@ cleanup:
         PKCS12_free(p12);
     BIO_free(in);
     return rc;
-}
-
-TCN_IMPLEMENT_CALL(void, SSLContext, setRandom)(TCN_STDARGS, jlong ctx,
-                                                jstring file)
-{
-    tcn_ssl_ctxt_t *c = J2P(ctx, tcn_ssl_ctxt_t *);
-    TCN_ALLOC_CSTRING(file);
-
-    TCN_ASSERT(ctx != 0);
-    UNREFERENCED(o);
-    if (J2S(file))
-        c->rand_file = apr_pstrdup(c->pool, J2S(file));
-    TCN_FREE_CSTRING(file);
 }
 
 TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCertificate)(TCN_STDARGS, jlong ctx,
@@ -923,10 +855,6 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCertificateRaw)(TCN_STDARGS, jlong c
         rv = JNI_FALSE;
         goto cleanup;
     }
-    if(c->certs[idx] != NULL) {
-        free(c->certs[idx]);
-    }
-    c->certs[idx] = certs;
 
     bio = BIO_new(BIO_s_mem());
     BIO_write(bio, key, lengthOfKey);
@@ -937,11 +865,17 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCertificateRaw)(TCN_STDARGS, jlong c
         ERR_error_string_n(SSL_ERR_get(), err, TCN_OPENSSL_ERROR_STRING_LENGTH);
         tcn_Throw(e, "Error reading private key (%s)", err);
         rv = JNI_FALSE;
+        X509_free(certs);
         goto cleanup;
     }
     BIO_free(bio);
+
+    if(c->certs[idx] != NULL) {
+        X509_free(c->certs[idx]);
+    }
+    c->certs[idx] = certs;
     if(c->keys[idx] != NULL) {
-        free(c->keys[idx]);
+        EVP_PKEY_free(c->keys[idx]);
     }
     c->keys[idx] = evp;
 
@@ -949,20 +883,20 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCertificateRaw)(TCN_STDARGS, jlong c
         ERR_error_string_n(SSL_ERR_get(), err, TCN_OPENSSL_ERROR_STRING_LENGTH);
         tcn_Throw(e, "Error setting certificate (%s)", err);
         rv = JNI_FALSE;
-        goto cleanup;
+        goto cleanup_openssl;
     }
     if (SSL_CTX_use_PrivateKey(c->ctx, c->keys[idx]) <= 0) {
         ERR_error_string_n(SSL_ERR_get(), err, TCN_OPENSSL_ERROR_STRING_LENGTH);
         tcn_Throw(e, "Error setting private key (%s)", err);
         rv = JNI_FALSE;
-        goto cleanup;
+        goto cleanup_openssl;
     }
     if (SSL_CTX_check_private_key(c->ctx) <= 0) {
         ERR_error_string_n(SSL_ERR_get(), err, TCN_OPENSSL_ERROR_STRING_LENGTH);
         tcn_Throw(e, "Private key does not match the certificate public key (%s)",
                   err);
         rv = JNI_FALSE;
-        goto cleanup;
+        goto cleanup_openssl;
     }
 
     /*
@@ -975,6 +909,13 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, setCertificateRaw)(TCN_STDARGS, jlong c
      */
 #endif
     SSL_CTX_set_dh_auto(c->ctx, 1);
+    goto cleanup;
+
+cleanup_openssl:
+    X509_free(certs);
+    EVP_PKEY_free(evp);
+    c->certs[idx] = NULL;
+    c->keys[idx] = NULL;
 cleanup:
     free(key);
     free(cert);
@@ -1061,154 +1002,10 @@ TCN_IMPLEMENT_CALL(jboolean, SSLContext, addClientCACertificateRaw)(TCN_STDARGS,
     return rv;
 }
 
-static int ssl_array_index(apr_array_header_t *array,
-                           const char *s)
-{
-    int i;
-    for (i = 0; i < array->nelts; i++) {
-        const char *p = APR_ARRAY_IDX(array, i, const char*);
-        if (!strcmp(p, s)) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-static int ssl_cmp_alpn_protos(apr_array_header_t *array,
-                               const char *proto1,
-                               const char *proto2)
-{
-    int index1 = ssl_array_index(array, proto1);
-    int index2 = ssl_array_index(array, proto2);
-    if (index2 > index1) {
-        return (index1 >= 0)? 1 : -1;
-    }
-    else if (index1 > index2) {
-        return (index2 >= 0)? -1 : 1;
-    }
-
-    /* Both have the same index (-1 so neither listed by cient) compare
-     * the names so that spdy3 gets precedence over spdy2. That makes
-     * the outcome at least deterministic. */
-    return strcmp((const char *)proto1, (const char *)proto2);
-}
-
-/*
- * This callback function is executed when the TLS Application Layer
- * Protocol Negotiate Extension (ALPN, RFC 7301) is triggered by the client
- * hello, giving a list of desired protocol names (in descending preference)
- * to the server.
- * The callback has to select a protocol name or return an error if none of
- * the clients preferences is supported.
- * The selected protocol does not have to be on the client list, according
- * to RFC 7301, so no checks are performed.
- * The client protocol list is serialized as length byte followed by ascii
- * characters (not null-terminated), followed by the next protocol name.
- */
-int cb_server_alpn(SSL *ssl,
-                   const unsigned char **out, unsigned char *outlen,
-                   const unsigned char *in, unsigned int inlen, void *arg)
-{
-    tcn_ssl_ctxt_t *tcsslctx = (tcn_ssl_ctxt_t *)arg;
-    tcn_ssl_conn_t *con = (tcn_ssl_conn_t *)SSL_get_app_data(ssl);
-    apr_array_header_t *client_protos;
-    apr_array_header_t *proposed_protos;
-    int i;
-    size_t len;
-
-    if (inlen == 0) {
-        // Client specified an empty protocol list. Nothing to negotiate.
-        return SSL_TLSEXT_ERR_ALERT_FATAL;
-    }
-
-    client_protos = apr_array_make(con->pool , 0, sizeof(char *));
-    for (i = 0; i < inlen; /**/) {
-        /* Grab length of next item from leading length byte */
-        unsigned int plen = in[i++];
-        if (plen + i > inlen) {
-            // The protocol name extends beyond the declared length
-            // of the protocol list.
-            return SSL_TLSEXT_ERR_ALERT_FATAL;
-        }
-        APR_ARRAY_PUSH(client_protos, char*) = apr_pstrndup(con->pool, (const char *)in+i, plen);
-        i += plen;
-    }
-
-    if (tcsslctx->alpn == NULL) {
-        // Server supported protocol names not set.
-        return SSL_TLSEXT_ERR_ALERT_FATAL;
-    }
-
-    if (tcsslctx->alpnlen == 0) {
-        // Server supported protocols is an empty list
-        return SSL_TLSEXT_ERR_ALERT_FATAL;
-    }
-
-    proposed_protos = apr_array_make(con->pool, 0, sizeof(char *));
-    for (i = 0; i < tcsslctx->alpnlen; /**/) {
-        /* Grab length of next item from leading length byte */
-        unsigned int plen = tcsslctx->alpn[i++];
-        if (plen + i > tcsslctx->alpnlen) {
-            // The protocol name extends beyond the declared length
-            // of the protocol list.
-            return SSL_TLSEXT_ERR_ALERT_FATAL;
-        }
-        APR_ARRAY_PUSH(proposed_protos, char*) = apr_pstrndup(con->pool, (const char *)tcsslctx->alpn+i, plen);
-        i += plen;
-    }
-
-    if (proposed_protos->nelts <= 0) {
-        // Should never happen. The server did not specify any protocols.
-        return SSL_TLSEXT_ERR_ALERT_FATAL;
-    }
-
-    /* Now select the most preferred protocol from the proposals. */
-    *out = APR_ARRAY_IDX(proposed_protos, 0, const unsigned char *);
-    for (i = 1; i < proposed_protos->nelts; ++i) {
-        const char *proto = APR_ARRAY_IDX(proposed_protos, i, const char*);
-        /* Do we prefer it over existing candidate? */
-        if (ssl_cmp_alpn_protos(client_protos, (const char *)*out, proto) < 0) {
-            *out = (const unsigned char*)proto;
-        }
-    }
-
-    len = strlen((const char*)*out);
-    if (len > 255) {
-        // Agreed protocol name too long
-        return SSL_TLSEXT_ERR_ALERT_FATAL;
-    }
-
-    *outlen = (unsigned char)len;
-
-    return SSL_TLSEXT_ERR_OK;
-}
-
-TCN_IMPLEMENT_CALL(jint, SSLContext, setALPN)(TCN_STDARGS, jlong ctx,
-                                              jbyteArray buf, jint len)
-{
-    tcn_ssl_ctxt_t *sslctx = J2P(ctx, tcn_ssl_ctxt_t *);
-
-    sslctx->alpn = apr_pcalloc(sslctx->pool, len);
-    (*e)->GetByteArrayRegion(e, buf, 0, len, (jbyte *)sslctx->alpn);
-    sslctx->alpnlen = len;
-
-    if (sslctx->mode == SSL_MODE_SERVER) {
-        SSL_CTX_set_alpn_select_cb(sslctx->ctx, cb_server_alpn, sslctx);
-    } else {
-        /*
-         * TODO: Implement client side call-back
-         * SSL_CTX_set_next_proto_select_cb(sslctx->ctx, cb_request_alpn, sslctx);
-         */
-        return APR_ENOTIMPL;
-    }
-    return 0;
-}
-
 /* Start of netty-tc-native add */
 
 /* Convert protos to wire format */
-static int initProtocols(JNIEnv *e, const tcn_ssl_ctxt_t *c, unsigned char **proto_data,
-            unsigned int *proto_len, jobjectArray protos) {
+static int initProtocols(JNIEnv *e, unsigned char **proto_data, unsigned int *proto_len, jobjectArray protos) {
     int i;
     unsigned char *p_data;
     /*
@@ -1254,8 +1051,9 @@ static int initProtocols(JNIEnv *e, const tcn_ssl_ctxt_t *c, unsigned char **pro
                 // Find start of buffer
                 unsigned char *p_data_start = p_data - (p_data_len - (1 + proto_chars_len));
                 unsigned char *p_data_tmp;
-                // double size
-                p_data_size <<= 1;
+                // double size until sufficient space is available
+                while (p_data_len > p_data_size)
+                    p_data_size <<= 1;
                 p_data_tmp = realloc(p_data_start, p_data_size);
                 if (p_data_tmp == NULL) {
                     // Not enough memory? Free the original buffer.
@@ -1303,7 +1101,7 @@ TCN_IMPLEMENT_CALL(void, SSLContext, setAlpnProtos)(TCN_STDARGS, jlong ctx, jobj
     TCN_ASSERT(ctx != 0);
     UNREFERENCED(o);
 
-    if (initProtocols(e, c, &c->alpn_proto_data, &c->alpn_proto_len, alpn_protos) == 0) {
+    if (initProtocols(e, &c->alpn_proto_data, &c->alpn_proto_len, alpn_protos) == 0) {
         c->alpn_selector_failure_behavior = selectorFailureBehavior;
 
         // depending on if it's client mode or not we need to call different functions.
@@ -1561,57 +1359,98 @@ static int SSL_cert_verify(X509_STORE_CTX *ctx, void *arg) {
 
     // Get a stack of all certs in the chain
     STACK_OF(X509) *sk = X509_STORE_CTX_get0_untrusted(ctx);
+    if (sk == NULL) {
+        return 0;
+    }
 
     int len = sk_X509_num(sk);
     unsigned i;
     X509 *cert;
     int length;
-    unsigned char *buf;
+    unsigned char *buf = NULL;
     JNIEnv *e;
-    jbyteArray array;
-    jbyteArray bArray;
+    jbyteArray array = NULL;
+    jbyteArray bArray = NULL;
     const char *authMethod;
-    jstring authMethodString;
+    jstring authMethodString = NULL;
     jboolean result;
     int r;
-    tcn_get_java_env(&e);
+
+    if (tcn_get_java_env(&e) != JNI_OK) {
+        // Fail verification if JNI environment is not avilable.
+        return 0;
+    }
 
     // Create the byte[][] array that holds all the certs
     array = (*e)->NewObjectArray(e, len, byteArrayClass, NULL);
+    if (array == NULL) {
+        goto failure;
+    }
 
     for(i = 0; i < len; i++) {
         cert = (X509*) sk_X509_value(sk, i);
 
-        buf = NULL;
         length = i2d_X509(cert, &buf);
         if (length < 0) {
-            // In case of error just return an empty byte[][]
-            array = (*e)->NewObjectArray(e, 0, byteArrayClass, NULL);
-            // We need to delete the local references so we not leak memory as this method is called via callback.
-            OPENSSL_free(buf);
-            break;
+            goto failure;
         }
         bArray = (*e)->NewByteArray(e, length);
+        if (bArray == NULL) {
+            goto failure;
+        }
         (*e)->SetByteArrayRegion(e, bArray, 0, length, (jbyte*) buf);
+        if ((*e)->ExceptionCheck(e)) {
+            goto failure;
+        }
         (*e)->SetObjectArrayElement(e, array, i, bArray);
+        if ((*e)->ExceptionCheck(e)) {
+            goto failure;
+        }
 
         // Delete the local reference as we not know how long the chain is and local references are otherwise
         // only freed once jni method returns.
         (*e)->DeleteLocalRef(e, bArray);
+        bArray = NULL;
         OPENSSL_free(buf);
+        buf = NULL;
     }
 
     authMethod = SSL_authentication_method(ssl);
     authMethodString = (*e)->NewStringUTF(e, authMethod);
+    if (authMethodString == NULL) {
+        goto failure;
+    }
 
-    result = (*e)->CallBooleanMethod(e, c->verifier, c->verifier_method, P2J(ssl), array,
-            authMethodString);
+    result = (*e)->CallBooleanMethod(e, c->verifier, c->verifier_method, P2J(ssl), array, authMethodString);
+    if ((*e)->ExceptionCheck(e)) {
+        goto failure;
+    }
 
     r = result == JNI_TRUE ? 1 : 0;
 
+    goto cleanup;
+
+failure:
+    if ((*e)->ExceptionCheck(e)) {
+        (*e)->ExceptionClear(e);
+    }
+    if (buf != NULL) {
+        OPENSSL_free(buf);
+    }
+    if (bArray != NULL) {
+        (*e)->DeleteLocalRef(e, bArray);
+    }
+    r = 0;
+
+cleanup:
     // We need to delete the local references so we not leak memory as this method is called via callback.
-    (*e)->DeleteLocalRef(e, authMethodString);
-    (*e)->DeleteLocalRef(e, array);
+    if (authMethodString != NULL) {
+        (*e)->DeleteLocalRef(e, authMethodString);
+    }
+    if (array != NULL) {
+        (*e)->DeleteLocalRef(e, array);
+    }
+
     return r;
 }
 

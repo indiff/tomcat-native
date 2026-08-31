@@ -30,9 +30,10 @@ extern int WIN32_SSL_password_prompt(tcn_pass_cb_t *data);
 #include <openssl/bio.h>
 #include <openssl/ocsp.h>
 /* defines with the values as seen by the asn1parse -dump openssl command */
-#define ASN1_SEQUENCE 0x30
-#define ASN1_OID      0x06
-#define ASN1_STRING   0x86
+#define ASN1_SEQUENCE           0x30
+#define ASN1_OID                0x06
+#define ASN1_STRING             0x86
+#define MAX_AIA_SEQUENCE_DEPTH  2
 static int ssl_verify_OCSP(X509_STORE_CTX *ctx, int timeout, int verifyFlags);
 static int ssl_ocsp_request(X509 *cert, X509 *issuer, X509_STORE_CTX *ctx, int timeout, int verifyFlags);
 #endif
@@ -298,10 +299,10 @@ int SSL_CTX_use_certificate_chain(SSL_CTX *ctx, const char *file,
 int SSL_callback_SSL_verify(int ok, X509_STORE_CTX *ctx)
 {
    /* Get Apache context back through OpenSSL context */
-    SSL *ssl = X509_STORE_CTX_get_ex_data(ctx,
-                                          SSL_get_ex_data_X509_STORE_CTX_idx());
+    SSL *ssl = X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
     tcn_ssl_conn_t *con = (tcn_ssl_conn_t *)SSL_get_app_data(ssl);
-    /* Get verify ingredients */
+
+    /* Set verify defaults from SSL Context */
     int errnum            = X509_STORE_CTX_get_error(ctx);
     int errdepth          = X509_STORE_CTX_get_error_depth(ctx);
     int verify            = con->ctx->verify_mode;
@@ -310,6 +311,12 @@ int SSL_callback_SSL_verify(int ok, X509_STORE_CTX *ctx)
     int ocsp_soft_fail    = con->ctx->ocsp_soft_fail;
     int ocsp_timeout      = con->ctx->ocsp_timeout;
     int ocsp_verify_flags = con->ctx->ocsp_verify_flags;
+
+    /* Check for SSL specific configuration */
+    if (con->verify_mode != SSL_CVERIFY_UNSET) {
+        verify = con->verify_mode;
+        depth = con->verify_depth;
+    }
 
 #if defined(SSL_OP_NO_TLSv1_3)
     con->pha_state = PHA_COMPLETE;
@@ -376,10 +383,6 @@ int SSL_callback_SSL_verify(int ok, X509_STORE_CTX *ctx)
         /* TODO: Some logging
          * Certificate Verification: Error
          */
-        if (con->peer) {
-            X509_free(con->peer);
-            con->peer = NULL;
-        }
     }
     if (errdepth > depth) {
         /* TODO: Some logging
@@ -390,52 +393,10 @@ int SSL_callback_SSL_verify(int ok, X509_STORE_CTX *ctx)
     return ok;
 }
 
-/*
- * This callback function is executed while OpenSSL processes the SSL
- * handshake and does SSL record layer stuff.  It's used to trap
- * client-initiated renegotiations, and for dumping everything to the
- * log.
- */
-void SSL_callback_handshake(const SSL *ssl, int where, int rc)
-{
-    tcn_ssl_conn_t *con = (tcn_ssl_conn_t *)SSL_get_app_data(ssl);
-#ifdef HAVE_TLSV1_3
-    const SSL_SESSION *session = SSL_get_session(ssl);
-#endif
-
-    /* Retrieve the conn_rec and the associated SSLConnRec. */
-    if (con == NULL) {
-        return;
-    }
-
-#ifdef HAVE_TLSV1_3
-    /* TLS 1.3 does not use renegotiation so do not update the renegotiation
-     * state once we know we are using TLS 1.3. */
-    if (session != NULL) {
-        if (SSL_SESSION_get_protocol_version(session) == TLS1_3_VERSION) {
-            return;
-        }
-    }
-#endif
-
-    /* If the reneg state is to reject renegotiations, check the SSL
-     * state machine and move to ABORT if a Client Hello is being
-     * read. */
-    if ((where & SSL_CB_HANDSHAKE_START) &&
-         con->reneg_state == RENEG_REJECT) {
-        con->reneg_state = RENEG_ABORT;
-    }
-    /* If the first handshake is complete, change state to reject any
-     * subsequent client-initated renegotiation. */
-    else if ((where & SSL_CB_HANDSHAKE_DONE) && con->reneg_state == RENEG_INIT) {
-        con->reneg_state = RENEG_REJECT;
-    }
-}
-
 /* The code here is inspired by nghttp2
  *
  * See https://github.com/tatsuhiro-t/nghttp2/blob/ae0100a9abfcf3149b8d9e62aae216e946b517fb/src/shrpx_ssl.cc#L244 */
-int select_next_proto(SSL *ssl, const unsigned char **out, unsigned char *outlen,
+static int select_next_proto(const unsigned char **out, unsigned char *outlen,
         const unsigned char *in, unsigned int inlen, unsigned char *supported_protos,
         unsigned int supported_protos_len, int failure_behavior) {
 
@@ -471,17 +432,18 @@ int select_next_proto(SSL *ssl, const unsigned char **out, unsigned char *outlen
         }
 
         // increment len and pointers.
-        i += target_proto_len;
+        i += 1 + target_proto_len;
         supported_protos += target_proto_len;
     }
 
     if (supported_protos_len > 0 && inlen > 0 && failure_behavior == SSL_SELECTOR_FAILURE_CHOOSE_MY_LAST_PROTOCOL) {
-         // There were no match but we just select our last protocol and hope the other peer support it.
+         // There was no match so select our last protocol and hope the peer supports it.
          //
-         // decrement the pointer again so the pointer points to the start of the protocol.
-         p -= proto_len;
+         // Switch the pointer to our list and decrement by the length of the last entry so the pointer points to the
+         // start of the protocol.
+         p = supported_protos - target_proto_len;
          *out = p;
-         *outlen = proto_len;
+         *outlen = target_proto_len;
          return SSL_TLSEXT_ERR_OK;
     }
     // TODO: OpenSSL currently not support to fail with fatal error. Once this changes we can also support it here.
@@ -493,7 +455,7 @@ int select_next_proto(SSL *ssl, const unsigned char **out, unsigned char *outlen
 int SSL_callback_alpn_select_proto(SSL* ssl, const unsigned char **out, unsigned char *outlen,
         const unsigned char *in, unsigned int inlen, void *arg) {
     tcn_ssl_ctxt_t *ssl_ctxt = arg;
-    return select_next_proto(ssl, out, outlen, in, inlen, ssl_ctxt->alpn_proto_data, ssl_ctxt->alpn_proto_len, ssl_ctxt->alpn_selector_failure_behavior);
+    return select_next_proto(out, outlen, in, inlen, ssl_ctxt->alpn_proto_data, ssl_ctxt->alpn_proto_len, ssl_ctxt->alpn_selector_failure_behavior);
 }
 #ifdef HAVE_OCSP
 
@@ -556,12 +518,16 @@ static void *apr_xrealloc(void *buf, size_t oldlen, size_t len, apr_pool_t *p)
  * Updates the pointer to the ASN.1 structure to point to the start of the data.
  * Returns 0 on success, 1 on failure.
  */
-static int parse_asn1_length(unsigned char **asn1, int *len) {
+static int parse_asn1_length(unsigned char **asn1, int *remaining, int *len) {
 
     /* Length immediately follows tag so increment before reading first (and
      * possibly only) length byte.
      */
     (*asn1)++;
+    (*remaining)--;
+    if (*remaining < 0) {
+        return 1;
+    }
 
     if (**asn1 & 0x80) {
         // MSB set. Remaining bits are number of bytes used to store the length.
@@ -589,6 +555,10 @@ static int parse_asn1_length(unsigned char **asn1, int *len) {
         while (i > 0) {
             l <<= 8;
             (*asn1)++;
+            (*remaining)--;
+            if (*remaining < 0) {
+                return 1;
+            }
             l += **asn1;
             i--;
         }
@@ -599,21 +569,27 @@ static int parse_asn1_length(unsigned char **asn1, int *len) {
     }
 
     (*asn1)++;
+    (*remaining)--;
+    if (*remaining < 0) {
+        return 1;
+    }
 
     return 0;
 }
 
 /* parses the ocsp url and updates the ocsp_urls and nocsp_urls variables
    returns 0 on success, 1 on failure */
-static int parse_ocsp_url(unsigned char *asn1, char ***ocsp_urls,
+static int parse_ocsp_url(unsigned char *asn1, int remaining, char ***ocsp_urls,
                           int *nocsp_urls, apr_pool_t *p)
 {
     char **new_ocsp_urls, *ocsp_url;
     int len, err = 0, new_nocsp_urls;
 
     if (*asn1 == ASN1_STRING) {
-        err = parse_asn1_length(&asn1, &len);
-
+        err = parse_asn1_length(&asn1, &remaining, &len);
+        if (!err && len > remaining) {
+            err = 1;
+        }
         if (!err) {
             new_nocsp_urls = *nocsp_urls+1;
             if ((new_ocsp_urls = apr_xrealloc(*ocsp_urls, *nocsp_urls * sizeof(char *), new_nocsp_urls * sizeof(char *), p)) == NULL)
@@ -622,7 +598,6 @@ static int parse_ocsp_url(unsigned char *asn1, char ***ocsp_urls,
         if (!err) {
             *ocsp_urls  = new_ocsp_urls;
             *nocsp_urls = new_nocsp_urls;
-            *(*ocsp_urls + *nocsp_urls) = NULL;
             if ((ocsp_url = apr_palloc(p, len + 1)) == NULL) {
                 err = 1;
             }
@@ -638,16 +613,19 @@ static int parse_ocsp_url(unsigned char *asn1, char ***ocsp_urls,
 }
 
 /* parses the ANS1 OID and if it is an OCSP OID then calls the parse_ocsp_url function */
-static int parse_ASN1_OID(unsigned char *asn1, char ***ocsp_urls, int *nocsp_urls, apr_pool_t *p)
+static int parse_ASN1_OID(unsigned char *asn1, int remaining, char ***ocsp_urls, int *nocsp_urls, apr_pool_t *p)
 {
     int len, err = 0 ;
     const unsigned char OCSP_OID[] = {0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x30, 0x01};
 
-    err = parse_asn1_length(&asn1, &len);
-
+    err = parse_asn1_length(&asn1, &remaining, &len);
+    if (!err && len > remaining) {
+        err = 1;
+    }
     if (!err && len == 8 && memcmp(asn1, OCSP_OID, 8) == 0) {
-        asn1+=len;
-        err = parse_ocsp_url(asn1, ocsp_urls, nocsp_urls, p);
+        asn1 += len;
+        remaining -= len;
+        err = parse_ocsp_url(asn1, remaining, ocsp_urls, nocsp_urls, p);
     }
     return err;
 }
@@ -659,21 +637,29 @@ static int parse_ASN1_OID(unsigned char *asn1, char ***ocsp_urls, int *nocsp_url
    the same sequence the while loop parses the sequences */
 
 /* This algo was developed with AIA in mind so it was tested only with this extension */
-static int parse_ASN1_Sequence(unsigned char *asn1, char ***ocsp_urls,
+static int parse_ASN1_Sequence(unsigned char *asn1, int remaining, int depth, char ***ocsp_urls,
                                int *nocsp_urls, apr_pool_t *p)
 {
     int len = 0 , err = 0;
 
-    while (!err && *asn1 != '\0') {
+    while (!err && *asn1 != '\0' && remaining > 0) {
         switch(*asn1) {
             case ASN1_SEQUENCE:
-                err = parse_asn1_length(&asn1, &len);
+                /* Initial call uses depth 0. */
+                if (depth >= MAX_AIA_SEQUENCE_DEPTH) {
+                    return 1;
+                }
+                err = parse_asn1_length(&asn1, &remaining, &len);
                 if (!err) {
-                    err = parse_ASN1_Sequence(asn1, ocsp_urls, nocsp_urls, p);
+                    if (len > remaining) {
+                        err = 1;
+                    } else {
+                        err = parse_ASN1_Sequence(asn1, len, depth + 1, ocsp_urls, nocsp_urls, p);
+                    }
                 }
             break;
             case ASN1_OID:
-                err = parse_ASN1_OID(asn1,ocsp_urls,nocsp_urls, p);
+                err = parse_ASN1_OID(asn1, remaining, ocsp_urls, nocsp_urls, p);
                 return err;
             break;
             default:
@@ -681,13 +667,15 @@ static int parse_ASN1_Sequence(unsigned char *asn1, char ***ocsp_urls,
             break;
         }
         asn1+=len;
+        remaining -= len;
     }
     return err;
 }
 
-/* the main function that gets the ASN1 encoding string and returns
-   a pointer to a NULL terminated "array" of char *, that contains
-   the ocsp_urls */
+/*
+ * The main function that gets the ASN1 encoding string and returns a pointer to an "array" of char *, that contains the
+ * ocsp_urls. The array is not NULL terminated since the length is tracked.
+ */
 static char **decode_OCSP_url(ASN1_OCTET_STRING *os, int *numofresponses, apr_pool_t *p)
 {
     char **response = NULL;
@@ -705,7 +693,7 @@ static char **decode_OCSP_url(ASN1_OCTET_STRING *os, int *numofresponses, apr_po
     if ((response = apr_pcalloc(p, sizeof(char *))) == NULL) {
         return NULL;
     }
-    if (parse_ASN1_Sequence(ocsp_urls, &response, numofresponses, p) ||
+    if (parse_ASN1_Sequence(ocsp_urls, len, 0, &response, numofresponses, p) ||
             *numofresponses ==0) {
         response = NULL;
     }
@@ -1041,6 +1029,10 @@ static int process_ocsp_response(OCSP_REQUEST *ocsp_req, OCSP_RESPONSE *ocsp_res
     }
 
     bs = OCSP_response_get1_basic(ocsp_resp);
+    if (bs == NULL) {
+        X509_STORE_CTX_set_error(ctx, X509_V_ERR_OCSP_RESP_INVALID);
+        return OCSP_STATUS_UNKNOWN;
+    }
     if (OCSP_check_nonce(ocsp_req, bs) == 0) {
         X509_STORE_CTX_set_error(ctx, X509_V_ERR_OCSP_RESP_INVALID);
         o = OCSP_STATUS_UNKNOWN;
@@ -1064,6 +1056,11 @@ static int process_ocsp_response(OCSP_REQUEST *ocsp_req, OCSP_RESPONSE *ocsp_res
 
     ss = OCSP_resp_get0(bs, OCSP_resp_find(bs, certid, -1)); /* find by serial number and get the matching response */
     i = OCSP_single_get0_status(ss, NULL, NULL, &thisupd, &nextupd);
+    if (i == -1) {
+        X509_STORE_CTX_set_error(ctx, X509_V_ERR_OCSP_RESP_INVALID);
+        o = OCSP_STATUS_UNKNOWN;
+        goto clean_certid;
+    }
     if (OCSP_check_validity(thisupd, nextupd, OCSP_MAX_SKEW, -1) <= 0) {
         X509_STORE_CTX_set_error(ctx, X509_V_ERR_OCSP_NOT_YET_VALID);
         o = OCSP_STATUS_UNKNOWN;
@@ -1148,6 +1145,9 @@ static int ssl_ocsp_request(X509 *cert, X509 *issuer, X509_STORE_CTX *ctx, int t
 
             OCSP_REQUEST_free(req);
         }
+    } else {
+        /* The AIA extension is not present or no URLs were found. */
+        X509_STORE_CTX_set_error(ctx, X509_V_ERR_UNABLE_TO_GET_CRL);
     }
     apr_pool_destroy(p);
     return rv;

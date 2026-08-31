@@ -47,6 +47,53 @@
     <update>
       Make Windows 10 / 11 the default target version for Windows builds. (rjung)
     </update>
+    <fix>
+      Fix a potential crash when negotiating ALPN. (markt)
+    </fix>
+    <fix>
+      If ALPN negotiation fails and failure is configured to use the last server
+      protocol in the list, use it rather than the last protocol offered by the
+      client. (markt)
+    </fix>
+    <fix>
+      Add support for the extended range of options available from OpenSSL
+      3.0.x. The options flag is now a 64-bit unsigned int (represented by a
+      Java long) rather than a 32-bit unsigned int (represented by a Java int). 
+      (markt)
+    </fix>
+    <scode>
+      Remove unused code. (markt)
+    </scode>
+    <fix>
+      Ensure that per connection changes to certificate verification settings,
+      e.g. to support client certificate authentication, do not modify the
+      certificate verification settings for other connections. (markt)
+    </fix>
+    <fix>
+      Fix a potential crash when configuring raw certificates. (markt)
+    </fix>
+    <fix>
+      Avoid a potential crash with very long ALPN protocol names. (markt)
+    </fix>
+    <fix>
+      Make the call to a CertificateVerifier more robust. (markt)
+    </fix>
+    <fix>
+      Avoid a potential crash when processing OCSP URLs. (markt)
+    </fix>
+    <fix>
+      Make the processing of OCSP responses more robust. (markt)
+    </fix>
+    <fix>
+      Stricter OCSP handling when soft-fail is disabled. (markt)
+    </fix>
+    <fix>
+      Harden against the mis-use of <code>Buffer.address(ByteBuffer)</code>.
+      (markt)
+    </fix>
+    <fix>
+      Harden against the mis-use of <code>Pool.destroy(long)</code>. (markt)
+    </fix>
   </changelog>
 </section>
 <section name="2.0.15" rtext="2026-06-15">

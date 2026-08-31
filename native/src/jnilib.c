@@ -43,7 +43,6 @@ static JavaVM     *tcn_global_vm = NULL;
 
 static jclass    jString_class;
 static jmethodID jString_init;
-static jmethodID jString_getBytes;
 
 int tcn_parent_pid = 0;
 
@@ -76,8 +75,6 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
     TCN_LOAD_CLASS(env, jString_class, "java/lang/String", JNI_ERR);
     TCN_GET_METHOD(env, jString_class, jString_init,
                    "<init>", "([B)V", JNI_ERR);
-    TCN_GET_METHOD(env, jString_class, jString_getBytes,
-                   "getBytes", "()[B", JNI_ERR);
 
 #ifdef WIN32
     {
@@ -131,28 +128,6 @@ jstring tcn_new_stringn(JNIEnv *env, const char *str, size_t l)
     return NULL;
 }
 
-jbyteArray tcn_new_arrayb(JNIEnv *env, const unsigned char *data, size_t len)
-{
-    jbyteArray bytes = 0;
-    
-    if ((*env)->EnsureLocalCapacity(env, 1) < 0) {
-        return NULL; /* out of memory error */
-    }
-    bytes = (*env)->NewByteArray(env, (jsize)len);
-    if (bytes != NULL) {
-        (*env)->SetByteArrayRegion(env, bytes, 0, (jint)len, (jbyte *)data);
-    }
-    return bytes;
-}
-
-jobjectArray tcn_new_arrays(JNIEnv *env, size_t len)
-{
-    if ((*env)->EnsureLocalCapacity(env, 1) < 0) {
-        return NULL; /* out of memory error */
-    }
-    return (*env)->NewObjectArray(env, (jsize)len, jString_class, NULL);
-}
-
 jstring tcn_new_string(JNIEnv *env, const char *str)
 {
     if (!str) {
@@ -163,62 +138,6 @@ jstring tcn_new_string(JNIEnv *env, const char *str)
         }
         return (*env)->NewStringUTF(env, str);
     }
-}
-
-char *tcn_get_string(JNIEnv *env, jstring jstr)
-{
-    jbyteArray bytes = NULL;
-    jthrowable exc;
-    char *result = NULL;
-
-    if ((*env)->EnsureLocalCapacity(env, 2) < 0) {
-        return NULL; /* out of memory error */
-    }
-    bytes = (*env)->CallObjectMethod(env, jstr, jString_getBytes);
-    exc = (*env)->ExceptionOccurred(env);
-    if (!exc) {
-        jint len = (*env)->GetArrayLength(env, bytes);
-        result = (char *)malloc(len + 1);
-        if (result == NULL) {
-            TCN_THROW_OS_ERROR(env);
-            (*env)->DeleteLocalRef(env, bytes);
-            return 0;
-        }
-        (*env)->GetByteArrayRegion(env, bytes, 0, len, (jbyte *)result);
-        result[len] = '\0'; /* NULL-terminate */
-    }
-    else {
-        (*env)->DeleteLocalRef(env, exc);
-    }
-    (*env)->DeleteLocalRef(env, bytes);
-
-    return result;
-}
-
-char *tcn_strdup(JNIEnv *env, jstring jstr)
-{
-    char *result = NULL;
-    const char *cjstr;
-
-    cjstr = (const char *)((*env)->GetStringUTFChars(env, jstr, 0));
-    if (cjstr) {
-        result = strdup(cjstr);
-        (*env)->ReleaseStringUTFChars(env, jstr, cjstr);
-    }
-    return result;
-}
-
-char *tcn_pstrdup(JNIEnv *env, jstring jstr, apr_pool_t *pool)
-{
-    char *result = NULL;
-    const char *cjstr;
-
-    cjstr = (const char *)((*env)->GetStringUTFChars(env, jstr, 0));
-    if (cjstr) {
-        result = apr_pstrdup(pool, cjstr);
-        (*env)->ReleaseStringUTFChars(env, jstr, cjstr);
-    }
-    return result;
 }
 
 TCN_IMPLEMENT_CALL(jboolean, Library, initialize)(TCN_STDARGS)
@@ -293,163 +212,6 @@ TCN_IMPLEMENT_CALL(jstring, Library, aprVersionString)(TCN_STDARGS)
 {
     UNREFERENCED(o);
     return AJP_TO_JSTRING(apr_version_string());
-}
-
-TCN_IMPLEMENT_CALL(jboolean, Library, has)(TCN_STDARGS, jint what)
-{
-    jboolean rv = JNI_FALSE;
-    UNREFERENCED_STDARGS;
-    switch (what) {
-        case 0:
-#if APR_HAVE_IPV6
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 1:
-#if APR_HAS_SHARED_MEMORY
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 2:
-#if APR_HAS_THREADS
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 3:
-#if APR_HAS_SENDFILE
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 4:
-#if APR_HAS_MMAP
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 5:
-#if APR_HAS_FORK
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 6:
-#if APR_HAS_RANDOM
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 7:
-#if APR_HAS_OTHER_CHILD
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 8:
-#if APR_HAS_DSO
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 9:
-#if APR_HAS_SO_ACCEPTFILTER
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 10:
-#if APR_HAS_UNICODE_FS
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 11:
-#if APR_HAS_PROC_INVOKED
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 12:
-#if APR_HAS_USER
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 13:
-#if APR_HAS_LARGE_FILES
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 14:
-#if APR_HAS_XTHREAD_FILES
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 15:
-#if APR_HAS_OS_UUID
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 16:
-#if APR_IS_BIGENDIAN
-            rv = JNI_TRUE;
-#endif
-        break;
-
-        case 17:
-#if APR_FILES_AS_SOCKETS
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 18:
-#if APR_CHARSET_EBCDIC
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 19:
-#if APR_TCP_NODELAY_INHERITED
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 20:
-#if APR_O_NONBLOCK_INHERITED
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 21:
-#if defined(APR_POLLSET_WAKEABLE)
-            rv = JNI_TRUE;
-#endif
-        break;
-        case 22:
-#ifdef APR_UNIX
-            rv = JNI_TRUE;
-#endif
-        break;
-    }
-    return rv;
-}
-
-TCN_IMPLEMENT_CALL(jint, Library, size)(TCN_STDARGS, jint what)
-{
-
-    UNREFERENCED_STDARGS;
-
-    switch (what) {
-        case 1:
-            return APR_SIZEOF_VOIDP;
-        break;
-        case 2:
-            return APR_PATH_MAX;
-        break;
-        case 3:
-            return APRMAXHOSTLEN;
-        break;
-        case 4:
-            return APR_MAX_IOVEC_SIZE;
-        break;
-        case 5:
-            return APR_MAX_SECS_TO_LINGER;
-        break;
-        case 6:
-            return APR_MMAP_THRESHOLD;
-        break;
-        case 7:
-            return APR_MMAP_LIMIT;
-        break;
-
-    }
-    return 0;
 }
 
 apr_pool_t *tcn_get_global_pool(void)
