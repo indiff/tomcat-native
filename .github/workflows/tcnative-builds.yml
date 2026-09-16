@@ -601,7 +601,7 @@ jobs:
 
           zip -r -q -9 "${cdir}/artifacts/tomcat-centos7-tc2-$LATEST_TOMCAT11.zip" .
           zip -r -q -9 "${cdir}/artifacts/tomcat-ubuntu-tc2-$LATEST_TOMCAT11.zip" .
-	  # fix chinese encoding
+	      # fix chinese encoding
           sed -i 's/encoding = UTF-8/encoding = GBK/Ig' conf/logging.properties
           zip -r -q -9 "${cdir}/artifacts/tomcat-windows-tc2-$LATEST_TOMCAT11.zip" .
 
