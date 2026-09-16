@@ -215,7 +215,8 @@ jobs:
           git clone --filter=blob:none --depth 1 -b ${{ matrix.apr_branch }} https://github.com/indiff/apr.git /tmp/apr
           cd /tmp/apr
           export LIBTOOLIZE=/usr/bin/libtoolize
-          ./buildconf
+          # ./buildconf
+          autoreconf -fi
           ./configure --prefix=/usr/local/apr ${{ matrix.apr-config }}
           make -j"$(nproc)"
           sudo make install
