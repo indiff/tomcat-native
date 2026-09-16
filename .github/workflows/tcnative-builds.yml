@@ -367,7 +367,7 @@ jobs:
         # 一行替换版本资源文件（使用绝对路径）
         $rcFile = "${{github.workspace}}\tcnative\native\os\win32\libtcnative.rc"
         if (Test-Path $rcFile) {
-          (Get-Content $rcFile) -replace 'Tomcat Native Java Library\\0', 'Tomcat Native Java Library build by indiff\\0' | Set-Content $rcFile
+          (Get-Content $rcFile) -replace 'Tomcat Native Java Library', 'Tomcat Native Java Library build by indiff' | Set-Content $rcFile
         }
         
         # 基础参数
