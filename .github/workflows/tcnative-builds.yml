@@ -204,8 +204,8 @@ jobs:
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
             build-essential autoconf automake libtool pkg-config \
-            zlib1g-dev expat1-dev openjdk-8-jdk perl nasm \
-            git wget sed zip tree ca-certificates
+            zlib1g-dev libexpat1-dev openjdk-8-jdk perl nasm git \
+            wget sed zip tree ca-certificates
 
           gcc -v
           make -v
