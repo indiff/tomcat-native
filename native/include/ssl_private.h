@@ -17,6 +17,9 @@
 #ifndef SSL_PRIVATE_H
 #define SSL_PRIVATE_H
 
+#include "apr_hash.h"
+#include "apr_thread_mutex.h"
+
 /* Exclude unused OpenSSL features
  * even if the OpenSSL supports them
  */
@@ -194,6 +197,24 @@ struct tcn_ssl_ctxt_t {
     /* certificate verifier callback */
     jobject verifier;
     jmethodID verifier_method;
+
+    /* TLSv1.2 server-side pre-shared key selector */
+    jobject psk_selector;
+    jmethodID psk_selector_method;
+
+    /* TLSv1.3 server-side pre-shared key selector */
+    jobject psk_find_session_selector;
+    jmethodID psk_find_session_selector_method;
+
+    /* TLSv1.2 client-side pre-shared key selector */
+    jobject psk_client_selector;
+    jmethodID psk_client_selector_method;
+
+    /* TLSv1.3 client-side pre-shared key selector */
+    jobject psk_use_session_selector;
+    jmethodID psk_use_session_selector_method;
+    apr_hash_t *psk_use_session_identities;
+    apr_thread_mutex_t *psk_use_session_identities_lock;
 
     /* Holds the alpn protocols, each of them prefixed with the len of the protocol */
     unsigned char   *alpn_proto_data;
