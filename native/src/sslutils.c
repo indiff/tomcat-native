@@ -29,6 +29,10 @@ extern int WIN32_SSL_password_prompt(tcn_pass_cb_t *data);
 #ifdef HAVE_OCSP
 #include <openssl/bio.h>
 #include <openssl/ocsp.h>
+#ifdef WIN32
+/* For SIO_TCP_INITIAL_RTO. Requires winsock2.h which is included via apr.h. */
+#include <mstcpip.h>
+#endif
 /* defines with the values as seen by the asn1parse -dump openssl command */
 #define ASN1_SEQUENCE           0x30
 #define ASN1_OID                0x06
@@ -727,10 +731,37 @@ static int add_ocsp_cert(OCSP_REQUEST *req, X509 *cert, X509 *issuer)
 }
 
 
-/* Creates the APR socket and connect to the hostname. Returns the
-   socket or NULL if there is an error.
+#if defined(WIN32) && defined(SIO_TCP_INITIAL_RTO)
+/* By default, Windows retries a connection attempt that is refused by
+   re-sending the SYN, so a refused connection takes ~2s to fail. For
+   loopback connections, where packet loss is not a concern, disable SYN
+   retransmission so that a refused connection fails immediately. The JDK
+   does the same. This is best effort - if it fails, the connection attempt
+   proceeds with the default behaviour.
 */
-static apr_socket_t *make_socket(char *hostname, int port, apr_pool_t *mp)
+static void disable_loopback_syn_retransmission(apr_socket_t *sock, apr_sockaddr_t *sa)
+{
+    apr_os_sock_t os_sock;
+    TCP_INITIAL_RTO_PARAMETERS rto;
+    DWORD bytes;
+
+    if (sa->family != APR_INET || (ntohl(sa->sa.sin.sin_addr.s_addr) >> 24) != 127) {
+        return;
+    }
+    if (apr_os_sock_get(&os_sock, sock) != APR_SUCCESS) {
+        return;
+    }
+    rto.Rtt = TCP_INITIAL_RTO_UNSPECIFIED_RTT;
+    rto.MaxSynRetransmissions = TCP_INITIAL_RTO_NO_SYN_RETRANSMISSIONS;
+    WSAIoctl(os_sock, SIO_TCP_INITIAL_RTO, &rto, sizeof(rto), NULL, 0, &bytes, NULL, NULL);
+}
+#endif
+
+/* Creates the APR socket and connect to the hostname. Returns the
+   socket or NULL if there is an error. The timeout (in microseconds)
+   applies to the connection attempt as well as subsequent I/O.
+*/
+static apr_socket_t *make_socket(char *hostname, int port, int timeout, apr_pool_t *mp)
 {
     apr_sockaddr_t *sa_in;
     apr_status_t status;
@@ -741,6 +772,13 @@ static apr_socket_t *make_socket(char *hostname, int port, apr_pool_t *mp)
 
     if (status == APR_SUCCESS)
         status = apr_socket_create(&sock, sa_in->family, SOCK_STREAM, APR_PROTO_TCP, mp);
+#if defined(WIN32) && defined(SIO_TCP_INITIAL_RTO)
+    if (status == APR_SUCCESS)
+        disable_loopback_syn_retransmission(sock, sa_in);
+#endif
+    /* Set the timeout before connecting so it also limits the connection attempt */
+    if (status == APR_SUCCESS)
+        status = apr_socket_timeout_set(sock, timeout);
     if (status == APR_SUCCESS)
         status = apr_socket_connect(sock, sa_in);
 
@@ -989,12 +1027,10 @@ static OCSP_RESPONSE *get_ocsp_response(apr_pool_t *p, char *url, OCSP_REQUEST *
     }
 
     apr_pool_create(&mp, p);
-    apr_sock = make_socket(hostname, port, mp);
+    apr_sock = make_socket(hostname, port, timeout, mp);
     if (apr_sock == NULL) {
         goto free_bio;
     }
-
-    apr_socket_timeout_set(apr_sock, timeout);
 
     ok = ocsp_send_req(apr_sock, bio_req);
     if (ok) {
